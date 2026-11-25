@@ -1,0 +1,15 @@
+key	en	ru
+viewer.title	HTML viewer — Mini Apps	Подсмотрщик HTML — Мини-приложения
+viewer.name	HTML viewer	Подсмотрщик
+viewer.placeholder	https://… or data/proto/page.html	https://… или data/proto/page.html
+viewer.open	Open	Открыть
+viewer.hint	Opened links go to “My links” and stay in this browser. Pages in data come from the repository.	Открытые ссылки попадают в «Мои ссылки» и живут в этом браузере. Страницы в data лежат в репозитории.
+viewer.back	Back	Назад
+viewer.reload	Reload	Обновить
+viewer.newtab	Open in a new tab	Открыть в новой вкладке
+viewer.frameHint	Page not shown? Some sites forbid embedding — open it in a new tab ↗.	Страница не показалась? Некоторые сайты запрещают встраивание — откройте её в новой вкладке ↗.
+viewer.sec.files	Pages in data	Страницы в data
+viewer.sec.links	Saved links	Сохранённые ссылки
+viewer.sec.mine	My links	Мои ссылки
+viewer.empty	Nothing here yet — type an address above.	Пока пусто — введите адрес в строке выше.
+viewer.remove	Remove from the list	Убрать из списка

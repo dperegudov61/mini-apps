@@ -2,6 +2,17 @@
   "updated": "2026-11-26",
   "apps": [
     {
+      "id": "viewer",
+      "name": "HTML viewer",
+      "nameRu": "Подсмотрщик HTML",
+      "description": "List of saved pages and links; pick one and see it",
+      "descriptionRu": "Список сохранённых страниц и ссылок: выбери и смотри",
+      "path": "apps/viewer/",
+      "icon": "apps/viewer/icon.png",
+      "tags": ["tool", "html", "preview"],
+      "created": "2026-11-26"
+    },
+    {
       "id": "breakout",
       "name": "Breakout",
       "nameRu": "Арканоид",

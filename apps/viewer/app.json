@@ -1,0 +1,16 @@
+{
+  "id": "viewer",
+  "name": "HTML viewer",
+  "nameRu": "Подсмотрщик HTML",
+  "description": "List of saved pages and links; pick one and see it",
+  "descriptionRu": "Список сохранённых страниц и ссылок: выбери и смотри",
+  "created": "2026-11-26",
+  "updated": "2026-11-26",
+  "version": "1.0.0",
+  "status": "ready",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "data": "data/",
+  "tags": ["tool", "html", "preview"],
+  "meta": {}
+}

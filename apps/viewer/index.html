@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="viewer.title">HTML viewer — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="viewer.name">HTML viewer</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <!-- строка: ввести свою ссылку -->
+  <form class="addrow" id="addForm" autocomplete="off">
+    <input id="urlInput" type="text" inputmode="url" spellcheck="false"
+           placeholder="https://… or data/proto/page.html" data-i18n-ph="viewer.placeholder"
+           aria-label="Page address" data-i18n-aria="viewer.placeholder">
+    <button class="btn" type="submit" data-i18n="viewer.open">Open</button>
+  </form>
+
+  <main class="list" id="list"></main>
+
+  <p class="hint" data-i18n="viewer.hint">Opened links go to “My links” and stay in this browser. Pages in data come from the repository.</p>
+</div>
+
+<!-- просмотр страницы -->
+<div class="view" id="view" hidden>
+  <div class="vbar">
+    <button class="vb" id="vBack" type="button" aria-label="Back" data-i18n-aria="viewer.back">←</button>
+    <b class="vname" id="vName"></b>
+    <button class="vb" id="vReload" type="button" aria-label="Reload" data-i18n-aria="viewer.reload">⟳</button>
+    <a class="vb" id="vExt" href="#" target="_blank" rel="noopener" aria-label="Open in a new tab" data-i18n-aria="viewer.newtab">↗</a>
+  </div>
+  <iframe id="vFrame" title="Preview" referrerpolicy="no-referrer" allow="fullscreen"></iframe>
+  <p class="vhint" data-i18n="viewer.frameHint">Page not shown? Some sites forbid embedding — open it in a new tab ↗.</p>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
