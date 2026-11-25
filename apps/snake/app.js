@@ -286,12 +286,18 @@
       ctx.stroke();
     }
 
+    // рамка поля
+    ctx.strokeStyle = 'rgba(120,170,255,.14)';
+    ctx.lineWidth = 2;
+    roundRect(1, 1, side - 2, side - 2, Math.min(20, cell * 1.2));
+    ctx.stroke();
+
     // яблоко
     if (food) {
       var pulse = 0.5 + 0.5 * Math.sin(anim / 280);
       var cx = food.x * cell + cell / 2;
       var cy = food.y * cell + cell / 2;
-      var r  = cell * (0.27 + 0.05 * pulse);
+      var r  = cell * (0.31 + 0.04 * pulse);
 
       ctx.save();
       ctx.shadowColor = 'rgba(255,80,90,.75)';
@@ -348,8 +354,8 @@
 
       // глаза смотрят туда, куда идёт голова
       if (k === 0) {
-        var ex = cell * 0.17, ey = cell * 0.17;
-        var ox = dir.x * cell * 0.12, oy = dir.y * cell * 0.12;
+        var ex = cell * 0.19, ey = cell * 0.19;
+        var ox = dir.x * cell * 0.10, oy = dir.y * cell * 0.10;
         var hx = x + sz / 2 + ox;
         var hy = y + sz / 2 + oy;
         var px = dir.y !== 0 ? ex : 0;
@@ -357,14 +363,14 @@
 
         ctx.fillStyle = '#f4fbff';
         ctx.beginPath();
-        ctx.arc(hx - (dir.x !== 0 ? 0 : px), hy - (dir.y !== 0 ? 0 : py), cell * 0.10, 0, Math.PI * 2);
-        ctx.arc(hx + (dir.x !== 0 ? 0 : px), hy + (dir.y !== 0 ? 0 : py), cell * 0.10, 0, Math.PI * 2);
+        ctx.arc(hx - (dir.x !== 0 ? 0 : px), hy - (dir.y !== 0 ? 0 : py), cell * 0.125, 0, Math.PI * 2);
+        ctx.arc(hx + (dir.x !== 0 ? 0 : px), hy + (dir.y !== 0 ? 0 : py), cell * 0.125, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = '#08131f';
         ctx.beginPath();
-        ctx.arc(hx - (dir.x !== 0 ? 0 : px) + dir.x * cell * 0.03, hy - (dir.y !== 0 ? 0 : py) + dir.y * cell * 0.03, cell * 0.045, 0, Math.PI * 2);
-        ctx.arc(hx + (dir.x !== 0 ? 0 : px) + dir.x * cell * 0.03, hy + (dir.y !== 0 ? 0 : py) + dir.y * cell * 0.03, cell * 0.045, 0, Math.PI * 2);
+        ctx.arc(hx - (dir.x !== 0 ? 0 : px) + dir.x * cell * 0.03, hy - (dir.y !== 0 ? 0 : py) + dir.y * cell * 0.03, cell * 0.06, 0, Math.PI * 2);
+        ctx.arc(hx + (dir.x !== 0 ? 0 : px) + dir.x * cell * 0.03, hy + (dir.y !== 0 ? 0 : py) + dir.y * cell * 0.03, cell * 0.06, 0, Math.PI * 2);
         ctx.fill();
       }
     }
