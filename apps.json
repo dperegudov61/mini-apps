@@ -1,0 +1,16 @@
+{
+  "updated": "2026-11-25",
+  "apps": [
+    {
+      "id": "snake",
+      "name": "Snake",
+      "nameRu": "Змейка",
+      "description": "Classic snake game on canvas",
+      "descriptionRu": "Классическая змейка на canvas",
+      "path": "apps/snake/",
+      "icon": "apps/snake/icon.png",
+      "tags": ["game", "canvas"],
+      "created": "2026-11-25"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "<id>",
+  "name": "Name",
+  "nameRu": "Название",
+  "description": "One line about the app",
+  "descriptionRu": "Одна строка о приложении",
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "version": "1.0.0",
+  "status": "draft",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "data": "data/",
+  "tags": [],
+  "meta": {}
+}

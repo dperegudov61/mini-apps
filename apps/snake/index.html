@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Змейка — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <a class="back" href="../../" title="Все приложения" aria-label="Все приложения">‹</a>
+    <h1>Змейка</h1>
+    <div class="scores">
+      <div class="pill"><span>Очки</span><b id="score">0</b></div>
+      <div class="pill"><span>Рекорд</span><b id="best">0</b></div>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="Игровое поле"></canvas>
+    <div class="overlay" id="ov">
+      <div class="panel">
+        <h2 id="ovTitle">Змейка</h2>
+        <p id="ovText">Стрелки или WASD — движение.<br>Пробел — пауза, R — заново.</p>
+        <button class="btn" id="btn" type="button">Играть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad" id="pad" aria-hidden="true">
+    <button type="button" class="key up" data-dir="up" aria-label="Вверх">▲</button>
+    <button type="button" class="key left" data-dir="left" aria-label="Влево">◀</button>
+    <button type="button" class="key down" data-dir="down" aria-label="Вниз">▼</button>
+    <button type="button" class="key right" data-dir="right" aria-label="Вправо">▶</button>
+  </div>
+
+  <p class="hint">Стрелки или WASD, пробел — пауза, R — заново. На телефоне — свайп или кнопки.</p>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

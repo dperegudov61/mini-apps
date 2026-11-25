@@ -1,0 +1,143 @@
+:root{
+  --bg:#070d18;
+  --text:#e8eefc;
+  --dim:#8ea2c4;
+  --line:rgba(120,170,255,.18);
+  --accent:#37d67a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:radial-gradient(1000px 620px at 50% -15%,#16264a 0%,#070d18 62%) fixed,#070d18;
+  color:var(--text);
+  font:16px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-text-size-adjust:100%;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+  overflow-x:hidden;
+  -webkit-user-select:none;
+  user-select:none;
+}
+
+.wrap{
+  width:100%;
+  max-width:560px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* ── верхняя строка ── */
+.bar{display:flex;align-items:center;gap:10px;min-height:40px}
+.back{
+  flex:none;
+  width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:11px;
+  color:var(--dim);text-decoration:none;
+  font-size:20px;line-height:1;
+  transition:color .15s,border-color .15s,background .15s;
+}
+.back:hover,.back:focus-visible{color:var(--text);border-color:rgba(120,170,255,.45);background:rgba(255,255,255,.05);outline:none}
+h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em;flex:1;min-width:0}
+.scores{display:flex;gap:8px;flex:none}
+.pill{
+  display:flex;flex-direction:column;align-items:center;
+  min-width:62px;padding:5px 10px;
+  border:1px solid var(--line);border-radius:12px;
+  background:rgba(255,255,255,.04);
+}
+.pill span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.pill b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent)}
+
+/* ── поле ── */
+.stage{
+  position:relative;
+  width:100%;
+  aspect-ratio:1/1;
+  align-self:center;
+  touch-action:none;
+}
+.stage canvas{display:block;width:100%;height:100%}
+
+.overlay{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;
+  border-radius:20px;
+  background:rgba(6,11,20,.72);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  transition:opacity .18s ease;
+}
+.overlay.hidden{opacity:0;pointer-events:none}
+.panel{
+  width:100%;max-width:300px;
+  padding:20px 18px;
+  text-align:center;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(22,38,74,.85),rgba(12,20,36,.92));
+  box-shadow:0 18px 40px rgba(0,0,0,.45);
+}
+.panel h2{margin:0 0 8px;font-size:22px;font-weight:600}
+.panel p{margin:0 0 16px;color:var(--dim);font-size:14px;line-height:1.5}
+.btn{
+  width:100%;
+  padding:11px 16px;
+  border:0;border-radius:12px;
+  background:linear-gradient(180deg,#3de283,#22a75c);
+  color:#05220f;
+  font:600 16px/1 "Segoe UI",system-ui,sans-serif;
+  cursor:pointer;
+  box-shadow:0 8px 20px rgba(55,214,122,.28);
+  transition:transform .12s ease,filter .12s ease;
+}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid #9ff3c4;outline-offset:2px}
+
+/* ── экранные кнопки (только на тач-устройствах) ── */
+.pad{display:none}
+@media (hover:none) and (pointer:coarse){
+  .pad{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-areas:
+      ". up ."
+      "left down right";
+    gap:8px;
+    max-width:260px;
+    width:100%;
+    margin:0 auto;
+    align-self:center;
+  }
+  .key{
+    -webkit-appearance:none;
+    appearance:none;
+    padding:14px 0;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(255,255,255,.05);
+    color:var(--text);
+    font-size:16px;
+    line-height:1;
+    touch-action:none;
+  }
+  .key:active{background:rgba(120,170,255,.2)}
+  .up{grid-area:up}
+  .left{grid-area:left}
+  .down{grid-area:down}
+  .right{grid-area:right}
+  .hint{display:none}
+}
+
+.hint{margin:0;text-align:center;color:var(--dim);font-size:12.5px}
+
+/* короткий экран: поле не должно выталкивать кнопки за пределы */
+@media (max-height:640px){
+  h1{font-size:17px}
+  .hint{display:none}
+}
