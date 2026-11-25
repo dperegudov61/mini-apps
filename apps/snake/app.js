@@ -1,42 +1,73 @@
 /*
  * Змейка — Mini Apps
- * Без библиотек и без сборки. Ключ рекорда: miniapps.snake.best
+ *
+ * Сложность меняет скорость и цену яблока (×1 / ×2 / ×3).
+ * Личный рекорд хранится всегда — в localStorage под ключом miniapps.snake.best.<сложность>.
+ * Таблица рекордов и места — только для вошедших в аккаунт: сервер отдаёт их
+ * по адресу /mini-apps/snake/records (там же лежат и сами рекорды, в папке человека).
  */
 (function () {
   'use strict';
 
   /* ─────────── настройки ─────────── */
-  var N         = 18;    // клеток по стороне
-  var START_MS  = 165;   // длительность шага в начале, мс
-  var MIN_MS    = 62;    // самый быстрый шаг
-  var SPEEDUP   = 4;     // на сколько мс быстрее за каждое яблоко
-  var BEST_KEY  = 'miniapps.snake.best';
-  var SWIPE_MIN = 20;    // порог свайпа, px
+  var N = 18;              // клеток по стороне
+  var SPEEDUP = 4;         // на сколько мс быстрее за каждое яблоко
+  var SWIPE_MIN = 20;      // порог свайпа, px
+  var BEST_KEY = 'miniapps.snake.best';   // .easy / .normal / .hard
+  var OLD_BEST = 'miniapps.snake.best';   // старый общий рекорд — считаем как «Обычно»
+  var DIFF_KEY = 'miniapps.snake.diff';
+  var SHOW = 20;           // сколько строк таблицы показывать
+
+  var DIFFS = {
+    easy:   { name: 'Легко',  mult: 1, start: 200, min: 95 },
+    normal: { name: 'Обычно', mult: 2, start: 165, min: 70 },
+    hard:   { name: 'Сложно', mult: 3, start: 130, min: 55 }
+  };
+  var ORDER = ['easy', 'normal', 'hard'];
 
   /* ─────────── разметка ─────────── */
-  var canvas   = document.getElementById('c');
-  var ctx      = canvas.getContext('2d');
-  var stage    = document.getElementById('stage');
-  var elScore  = document.getElementById('score');
-  var elBest   = document.getElementById('best');
-  var ov       = document.getElementById('ov');
-  var ovTitle  = document.getElementById('ovTitle');
-  var ovText   = document.getElementById('ovText');
-  var btn      = document.getElementById('btn');
-  var pad      = document.getElementById('pad');
+  var $ = function (id) { return document.getElementById(id); };
+  var canvas = $('c');
+  var ctx = canvas.getContext('2d');
+  var stage = $('stage');
+  var elScore = $('score');
+  var ov = $('ov'), ovTitle = $('ovTitle'), ovText = $('ovText'), btn = $('btn');
+  var pad = $('pad'), diffs = $('diffs');
+  var recMine = $('recMine'), recMineVal = $('recMineVal'), recMinePos = $('recMinePos');
+  var recGlob = $('recGlob'), recGlobVal = $('recGlobVal'), recGlobName = $('recGlobName');
+  var hintAuth = $('hintAuth');
+  var board = $('board'), boardRows = $('boardRows'), boardNote = $('boardNote');
+  var boardDiff = $('boardDiff'), boardClose = $('boardClose');
 
-  /* ─────────── состояние ─────────── */
-  var dpr   = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  var cell  = 16;          // размер клетки, CSS px
+  /* ─────────── состояние игры ─────────── */
+  var dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  var cell = 16;
+  var diff = 'normal';
+  var bests = { easy: 0, normal: 0, hard: 0 };
   var state = 'idle';      // idle | playing | paused | over
   var snake, dir, queue, food;
-  var score = 0, best = 0, stepMs = START_MS;
+  var score = 0, apples = 0, stepMs = 165;
   var acc = 0, last = 0, anim = 0, dead = false;
 
-  try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch (e) { best = 0; }
-  elBest.textContent = String(best);
+  /* ─────────── состояние сервера ─────────── */
+  var srv = { url: '', token: '', authed: false, myId: '', myName: '', place: 0, players: 0, top: [], best: 0 };
 
-  /* ─────────── утилиты ─────────── */
+  /* ─────────── мелочи ─────────── */
+  function ls(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function lss(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
+  function lsi(k, def) {
+    try { var v = parseInt(localStorage.getItem(k) || '', 10); return isFinite(v) ? v : def; }
+    catch (e) { return def; }
+  }
+  function fmt(n) { return String(n == null ? 0 : n); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function placeClass(p) { return p === 1 ? 'p1' : p === 2 ? 'p2' : p === 3 ? 'p3' : 'pn'; }
+  function rand(n) { return Math.floor(Math.random() * n); }
+
   function roundRect(x, y, w, h, r) {
     r = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -48,7 +79,292 @@
     ctx.closePath();
   }
 
-  function rand(n) { return Math.floor(Math.random() * n); }
+  /* ─────────── личные рекорды ─────────── */
+  function loadBests() {
+    var i, d;
+    for (i = 0; i < ORDER.length; i++) {
+      d = ORDER[i];
+      bests[d] = Math.max(0, lsi(BEST_KEY + '.' + d, 0));
+    }
+    // рекорд, набранный до появления сложностей, считаем как «Обычно»
+    var old = Math.max(0, lsi(OLD_BEST, 0));
+    if (old > bests.normal) { bests.normal = old; lss(BEST_KEY + '.normal', old); }
+  }
+  function setBest(d, v) {
+    if (v <= bests[d]) return false;
+    bests[d] = v;
+    lss(BEST_KEY + '.' + d, v);
+    return true;
+  }
+
+  /* ─────────── сеть ─────────── */
+  function timeout(ms) {
+    var ctl = new AbortController();
+    var t = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, ms);
+    return { signal: ctl.signal, done: function () { clearTimeout(t); } };
+  }
+
+  function fetchJSON(url, opt, ms) {
+    var tm = timeout(ms || 8000);
+    var o = opt || {};
+    o.signal = tm.signal;
+    if (o.cache === undefined) o.cache = 'no-store';
+    return fetch(url, o).then(function (r) {
+      tm.done();
+      return r.text().then(function (txt) {
+        var j = {};
+        try { j = JSON.parse(txt || '{}'); } catch (e) {}
+        return { status: r.status, ok: r.ok, json: j };
+      });
+    }).catch(function () { tm.done(); return { status: 0, ok: false, json: {} }; });
+  }
+
+  var REPO = 'dperegudov61/dperegudov61.github.io';
+  var STATUS_API = 'https://api.github.com/repos/' + REPO + '/contents/status.json';
+  var STATUS_RAW = 'https://raw.githubusercontent.com/' + REPO + '/main/status.json';
+  var STATUS_LOCAL = (location.protocol === 'http:' || location.protocol === 'https:')
+    ? location.origin + '/status.json' : '';
+
+  function b64ToText(b64) {
+    var bin = atob(String(b64).replace(/\s/g, ''));
+    var n = bin.length, bytes = new Uint8Array(n), i;
+    for (i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+    if (window.TextDecoder) return new TextDecoder('utf-8').decode(bytes);
+    var s = '';
+    for (i = 0; i < n; i++) s += String.fromCharCode(bytes[i]);
+    return decodeURIComponent(escape(s));
+  }
+  function statusFrom(r) {
+    if (!r || !r.ok) return null;
+    var j = r.json || {};
+    if (typeof j.content === 'string' && j.encoding === 'base64') {
+      try { j = JSON.parse(b64ToText(j.content)); } catch (e) { return null; }
+    }
+    return (j && (typeof j.url === 'string' || j.connections)) ? j : null;
+  }
+  function connsOf(j) {
+    var out = [], arr = j && j.connections, i;
+    if (Object.prototype.toString.call(arr) === '[object Array]') {
+      for (i = 0; i < arr.length; i++) {
+        var c = arr[i] || {};
+        if (typeof c.url !== 'string' || !c.url) continue;
+        out.push({ url: c.url.replace(/\/+$/, ''), updated: Date.parse(c.created || '') || 0 });
+      }
+    }
+    if (!out.length && j && typeof j.url === 'string' && j.url)
+      out.push({ url: j.url.replace(/\/+$/, ''), updated: Date.parse(j.updated || '') || 0 });
+    return out;
+  }
+  function statusList() {
+    var bust = '?v=' + Date.now();
+    var reqs = [fetchJSON(STATUS_API, { headers: { Accept: 'application/vnd.github+json' } }, 8000)];
+    if (STATUS_LOCAL) reqs.push(fetchJSON(STATUS_LOCAL + bust, null, 6000));
+    reqs.push(fetchJSON(STATUS_RAW + bust, null, 8000));
+    return Promise.all(reqs).then(function (res) {
+      var seen = {}, out = [], i, k;
+      for (i = 0; i < res.length; i++) {
+        var list = connsOf(statusFrom(res[i]));
+        for (k = 0; k < list.length; k++) {
+          var u = list[k].url;
+          if (seen[u]) { if (list[k].updated > seen[u].updated) seen[u].updated = list[k].updated; continue; }
+          seen[u] = list[k];
+        }
+      }
+      for (var key in seen) if (Object.prototype.hasOwnProperty.call(seen, key)) out.push(seen[key]);
+      var mem = ls('door.url');
+      if (mem && !seen[mem]) out.push({ url: mem, updated: 0 });
+      out.sort(function (a, b) { return b.updated - a.updated; });
+      var urls = [], j;
+      for (j = 0; j < out.length; j++) urls.push(out[j].url);
+      return urls;
+    });
+  }
+  function ping(base) {
+    if (!base) return Promise.resolve(false);
+    return fetchJSON(base + '/__door/hi', null, 6000).then(function (r) {
+      return !!(r.ok && r.json && r.json.ok === true);
+    });
+  }
+  function firstLive(urls) {
+    return new Promise(function (resolve) {
+      if (!urls.length) { resolve(''); return; }
+      var left = urls.length, done = false;
+      urls.forEach(function (u) {
+        ping(u).then(function (alive) {
+          left--;
+          if (alive && !done) { done = true; resolve(u); }
+          else if (left === 0 && !done) { done = true; resolve(''); }
+        });
+      });
+    });
+  }
+  // адрес живого сервера: помним последний, иначе смотрим список мостов
+  function findServer() {
+    var mem = ls('door.url');
+    var fast = mem ? ping(mem).then(function (ok) { return ok ? mem : ''; }) : Promise.resolve('');
+    return fast.then(function (u) {
+      if (u) return u;
+      return statusList().then(function (list) { return firstLive(list); });
+    });
+  }
+
+  function api(path, body) {
+    var opt = { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + srv.token } };
+    if (body) {
+      opt.headers['Content-Type'] = 'application/json';
+      opt.body = JSON.stringify(body);
+    }
+    return fetchJSON(srv.url + path, opt, 10000).then(function (r) {
+      if (r.status === 401) { var e = new Error('нужен вход'); e.noauth = true; throw e; }
+      if (!r.ok || !r.json || r.json.ok !== true) throw new Error('сервер: ' + r.status);
+      return r.json;
+    });
+  }
+
+  function offlineMode() {
+    srv.authed = false;
+    srv.top = [];
+    srv.place = 0;
+    srv.players = 0;
+    srv.best = 0;
+    renderRecs();
+    if (!board.hidden) renderBoard();
+  }
+
+  function applyRecords(j) {
+    // ответ мог прийти уже после смены сложности — тогда он не наш
+    if (j && j.difficulty && j.difficulty !== diff) return;
+    srv.authed = true;
+    srv.myId = (j.me && j.me.id) || '';
+    srv.myName = (j.me && j.me.name) || '';
+    srv.place = (j.me && j.me.place) || 0;
+    srv.players = j.players || 0;
+    srv.top = j.top || [];
+    srv.best = (j.me && j.me.score) || 0;
+    if (srv.best > bests[diff]) setBest(diff, srv.best);   // рекорд с другого устройства
+    renderRecs();
+    if (!board.hidden) renderBoard();
+  }
+
+  function loadRecords() {
+    srv.token = srv.token || ls('door.token');
+    if (!srv.token || !window.fetch) { offlineMode(); return Promise.resolve(); }
+
+    var step = srv.url
+      ? ping(srv.url).then(function (ok) { return ok ? srv.url : ''; })
+      : Promise.resolve('');
+
+    return step.then(function (u) {
+      if (u) return u;
+      return findServer();
+    }).then(function (u) {
+      if (!u) throw new Error('сервер не найден');
+      srv.url = u;
+      lss('door.url', u);
+      return api('/mini-apps/snake/records?difficulty=' + diff);
+    }).then(applyRecords).catch(function () {
+      // нет сети, нет сервера или не вошёл — остаётся старый интерфейс: только личный рекорд
+      offlineMode();
+    });
+  }
+
+  function submit(score) {
+    if (!srv.authed) return Promise.resolve();
+    if (score <= srv.best) return Promise.resolve();
+    return api('/mini-apps/snake/records', { difficulty: diff, score: score })
+      .then(applyRecords)
+      .catch(function (e) { if (e && e.noauth) offlineMode(); });
+  }
+
+  /* ─────────── значки рекордов ─────────── */
+  function renderRecs() {
+    recMineVal.textContent = fmt(bests[diff]);
+    if (srv.authed && srv.place > 0) {
+      recMinePos.textContent = 'место ' + srv.place;
+      recMinePos.className = 'pos ' + placeClass(srv.place);
+    } else {
+      recMinePos.textContent = '';
+      recMinePos.className = 'pos pn';
+    }
+    if (srv.authed && srv.top.length) {
+      recGlobVal.textContent = fmt(srv.top[0].score);
+      recGlobName.textContent = srv.top[0].name;
+      recGlob.hidden = false;
+      recGlob.title = 'Общий рекорд: ' + srv.top[0].name + ' — ' + srv.top[0].score + '. Открыть таблицу';
+    } else {
+      recGlob.hidden = true;
+    }
+    hintAuth.hidden = !srv.authed;
+  }
+
+  function renderBoard() {
+    boardDiff.textContent = DIFFS[diff].name;
+    var rows = srv.top || [], html = [], i, e, cls, mine = false;
+    for (i = 0; i < rows.length; i++) {
+      e = rows[i];
+      if (srv.myId && e.id === srv.myId) mine = true;
+      cls = (srv.myId && e.id === srv.myId) ? ' class="me"' : '';
+      html.push('<tr' + cls + '>' +
+        '<td class="' + placeClass(e.place) + '">' + esc(e.place) + '</td>' +
+        '<td>' + esc(e.name) + '</td>' +
+        '<td class="id">' + esc(e.id) + '</td>' +
+        '<td class="sc">' + esc(fmt(e.score)) + '</td></tr>');
+    }
+    boardRows.innerHTML = html.length
+      ? html.join('')
+      : '<tr><td colspan="4" class="empty">Пока никто не играл на этой сложности — будь первым.</td></tr>';
+
+    if (srv.place > 0 && !mine) {
+      boardNote.textContent = 'Твоё место: ' + srv.place + ' из ' + srv.players + ' · рекорд ' + fmt(bests[diff]);
+    } else if (srv.players > 0) {
+      boardNote.textContent = 'Игроков: ' + srv.players + ' · всего строк: ' + Math.min(SHOW, rows.length);
+    } else {
+      boardNote.textContent = '';
+    }
+  }
+
+  function openBoard() {
+    if (!srv.authed) return;
+    if (state === 'playing') togglePause();
+    renderBoard();
+    board.hidden = false;
+    document.body.style.overflow = 'hidden';
+    boardClose.focus();
+    loadRecords();
+  }
+  function closeBoard() {
+    board.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  /* ─────────── сложность ─────────── */
+  function markDiffs() {
+    var btns = diffs.querySelectorAll('button[data-diff]');
+    for (var i = 0; i < btns.length; i++)
+      btns[i].className = btns[i].getAttribute('data-diff') === diff ? 'on' : '';
+  }
+
+  function setDiff(id) {
+    if (!DIFFS[id] || id === diff) return;
+    var wasPlaying = (state === 'playing' || state === 'paused');
+    diff = id;
+    lss(DIFF_KEY, id);
+    markDiffs();
+    srv.top = [];
+    srv.place = 0;
+    srv.players = 0;
+    srv.best = 0;
+    reset();
+    if (wasPlaying) { state = 'playing'; hideOverlay(); }
+    else { state = 'idle'; showOverlay('Змейка', intro(), 'Играть'); }
+    renderRecs();
+    loadRecords();
+  }
+
+  function intro() {
+    return 'Яблоко: ×' + DIFFS[diff].mult + ' (' + DIFFS[diff].name + ').<br>' +
+           'Стрелки или WASD — движение, пробел — пауза.';
+  }
 
   /* ─────────── размер поля ─────────── */
   function resize() {
@@ -56,22 +372,23 @@
     var h = stage.clientHeight || w;
     var side = Math.max(160, Math.min(w, h));
     cell = side / N;
-    canvas.width  = Math.round(side * dpr);
+    canvas.width = Math.round(side * dpr);
     canvas.height = Math.round(side * dpr);
-    canvas.style.width  = '100%';
+    canvas.style.width = '100%';
     canvas.style.height = '100%';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
   }
 
-  /* ─────────── новая партия ─────────── */
+  /* ─────────── партия ─────────── */
   function reset() {
     var mid = Math.floor(N / 2);
     snake = [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
-    dir   = { x: 1, y: 0 };
+    dir = { x: 1, y: 0 };
     queue = [];
     score = 0;
-    stepMs = START_MS;
+    apples = 0;
+    stepMs = DIFFS[diff].start;
     acc = 0;
     last = 0;
     dead = false;
@@ -94,20 +411,14 @@
     return free[rand(free.length)];
   }
 
-  /* ─────────── шаг игры ─────────── */
   function step() {
-    // отбрасываем развороты «на 180°» в очереди
     while (queue.length && queue[0].x === -dir.x && queue[0].y === -dir.y) queue.shift();
     if (queue.length) dir = queue.shift();
 
     var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-
-    // стены
     if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N) return gameOver();
 
     var eat = !!(food && head.x === food.x && head.y === food.y);
-
-    // хвост сместится в этом же шаге, если не едим — его не считаем
     var upto = eat ? snake.length : snake.length - 1;
     for (var i = 0; i < upto; i++) {
       if (snake[i].x === head.x && snake[i].y === head.y) return gameOver();
@@ -116,14 +427,12 @@
     snake.unshift(head);
 
     if (eat) {
-      score += 1;
+      var d = DIFFS[diff];
+      apples += 1;
+      score += d.mult;
       elScore.textContent = String(score);
-      if (score > best) {
-        best = score;
-        elBest.textContent = String(best);
-        try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
-      }
-      stepMs = Math.max(MIN_MS, START_MS - score * SPEEDUP);
+      if (setBest(diff, score)) renderRecs();
+      stepMs = Math.max(d.min, d.start - apples * SPEEDUP);
       food = spawn();
       if (!food) return win();
     } else {
@@ -150,15 +459,31 @@
     }
   }
 
+  function overText() {
+    var s = 'Очки: ' + fmt(score) + ' · рекорд: ' + fmt(bests[diff]) + '.';
+    if (srv.authed) {
+      if (srv.place > 0) s += '<br>Место: ' + srv.place + ' из ' + srv.players + '.';
+      else s += '<br>Рекорд не вошёл в таблицу.';
+    }
+    return s;
+  }
+
   function gameOver() {
     state = 'over';
     dead = true;
-    showOverlay('Игра окончена', 'Очки: ' + score + '. Рекорд: ' + best + '.', 'Ещё раз');
+    var isNew = score > bests[diff];
+    setBest(diff, score);
+    renderRecs();
+    showOverlay(isNew && score > 0 ? 'Новый рекорд!' : 'Игра окончена', overText(), 'Ещё раз');
+    submit(score).then(function () { if (state === 'over') ovText.innerHTML = overText(); });
   }
 
   function win() {
     state = 'over';
-    showOverlay('Победа!', 'Поле заполнено. Очки: ' + score + '.', 'Заново');
+    setBest(diff, score);
+    renderRecs();
+    showOverlay('Победа!', 'Поле заполнено. Очки: ' + fmt(score) + '.', 'Заново');
+    submit(score);
   }
 
   function showOverlay(title, text, buttonText) {
@@ -167,21 +492,18 @@
     btn.textContent = buttonText;
     ov.classList.remove('hidden');
   }
-
-  function hideOverlay() {
-    ov.classList.add('hidden');
-  }
+  function hideOverlay() { ov.classList.add('hidden'); }
 
   /* ─────────── управление ─────────── */
   function setDir(x, y) {
-    if (state === 'idle' || state === 'over') { start(); }
+    if (state === 'idle' || state === 'over') start();
     if (state !== 'playing') {
       if (queue.length < 2) queue.push({ x: x, y: y });
       return;
     }
     var cur = queue.length ? queue[queue.length - 1] : dir;
-    if (cur.x === x && cur.y === y) return;        // уже так идём
-    if (cur.x === -x && cur.y === -y) return;      // разворот запрещён
+    if (cur.x === x && cur.y === y) return;
+    if (cur.x === -x && cur.y === -y) return;
     if (queue.length < 2) queue.push({ x: x, y: y });
   }
 
@@ -196,6 +518,10 @@
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     var key = (e.key || '').toLowerCase();
 
+    if (!board.hidden) {
+      if (key === 'escape') { e.preventDefault(); closeBoard(); }
+      return;
+    }
     if (KEYS[key]) {
       e.preventDefault();
       setDir(KEYS[key][0], KEYS[key][1]);
@@ -221,7 +547,12 @@
     if (state === 'paused') togglePause(); else start();
   });
 
-  // экранные стрелки
+  diffs.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-diff]') : null;
+    if (!b) return;
+    setDiff(b.getAttribute('data-diff'));
+  });
+
   pad.addEventListener('pointerdown', function (e) {
     var b = e.target.closest ? e.target.closest('[data-dir]') : null;
     if (!b) return;
@@ -233,10 +564,9 @@
     if (d === 'right') setDir(1, 0);
   }, { passive: false });
 
-  // свайпы
-  var sx = 0, sy = 0, moved = false;
+  var sx = 0, sy = 0;
   stage.addEventListener('pointerdown', function (e) {
-    sx = e.clientX; sy = e.clientY; moved = false;
+    sx = e.clientX; sy = e.clientY;
   }, { passive: true });
 
   stage.addEventListener('pointerup', function (e) {
@@ -245,7 +575,6 @@
       if (state === 'idle' || state === 'over') start(); else togglePause();
       return;
     }
-    moved = true;
     if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
     else                             setDir(0, dy > 0 ? 1 : -1);
   }, { passive: true });
@@ -258,6 +587,10 @@
     if (document.hidden && state === 'playing') togglePause();
   });
 
+  recGlob.addEventListener('click', openBoard);
+  boardClose.addEventListener('click', closeBoard);
+  board.addEventListener('click', function (e) { if (e.target === board) closeBoard(); });
+
   /* ─────────── рисование ─────────── */
   function draw() {
     var side = cell * N;
@@ -265,7 +598,6 @@
 
     ctx.clearRect(0, 0, side, side);
 
-    // фон поля
     var bg = ctx.createLinearGradient(0, 0, side, side);
     bg.addColorStop(0, '#16233c');
     bg.addColorStop(1, '#0b1322');
@@ -273,15 +605,14 @@
     ctx.fillStyle = bg;
     ctx.fill();
 
-    // сетка
     if (cell >= 12) {
       ctx.strokeStyle = 'rgba(120,170,255,.075)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (var i = 1; i < N; i++) {
         var p = Math.round(i * cell) + 0.5;
-        ctx.moveTo(p, 0);      ctx.lineTo(p, side);
-        ctx.moveTo(0, p);      ctx.lineTo(side, p);
+        ctx.moveTo(p, 0); ctx.lineTo(p, side);
+        ctx.moveTo(0, p); ctx.lineTo(side, p);
       }
       ctx.stroke();
     }
@@ -292,12 +623,11 @@
     roundRect(1, 1, side - 2, side - 2, Math.min(20, cell * 1.2));
     ctx.stroke();
 
-    // яблоко
     if (food) {
       var pulse = 0.5 + 0.5 * Math.sin(anim / 280);
       var cx = food.x * cell + cell / 2;
       var cy = food.y * cell + cell / 2;
-      var r  = cell * (0.31 + 0.04 * pulse);
+      var r = cell * (0.31 + 0.04 * pulse);
 
       ctx.save();
       ctx.shadowColor = 'rgba(255,80,90,.75)';
@@ -312,7 +642,6 @@
       ctx.fill();
       ctx.restore();
 
-      // блик и листик
       ctx.fillStyle = 'rgba(255,255,255,.75)';
       ctx.beginPath();
       ctx.ellipse(cx - r * 0.3, cy - r * 0.35, r * 0.22, r * 0.15, -0.6, 0, Math.PI * 2);
@@ -323,14 +652,13 @@
       ctx.fill();
     }
 
-    // змейка: от хвоста к голове, голова сверху
-    var pad = cell * 0.09;
+    var pad2 = cell * 0.09;
     for (var k = snake.length - 1; k >= 0; k--) {
       var s = snake[k];
       var t = snake.length > 1 ? k / (snake.length - 1) : 0;
-      var x = s.x * cell + pad;
-      var y = s.y * cell + pad;
-      var sz = cell - pad * 2;
+      var x = s.x * cell + pad2;
+      var y = s.y * cell + pad2;
+      var sz = cell - pad2 * 2;
 
       if (dead) {
         ctx.fillStyle = 'hsl(' + Math.round(348 - 12 * t) + ',58%,' + Math.round(46 - 10 * t) + '%)';
@@ -352,7 +680,6 @@
         ctx.fill();
       }
 
-      // глаза смотрят туда, куда идёт голова
       if (k === 0) {
         var ex = cell * 0.19, ey = cell * 0.19;
         var ox = dir.x * cell * 0.10, oy = dir.y * cell * 0.10;
@@ -400,10 +727,17 @@
   }
 
   /* ─────────── старт ─────────── */
+  loadBests();
+  var saved = ls(DIFF_KEY);
+  diff = DIFFS[saved] ? saved : 'normal';
+  markDiffs();
+
   reset();
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
-  showOverlay('Змейка', 'Стрелки или WASD — движение.<br>Пробел — пауза, R — заново.', 'Играть');
+  showOverlay('Змейка', intro(), 'Играть');
+  renderRecs();
+  loadRecords();
   requestAnimationFrame(loop);
 })();

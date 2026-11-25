@@ -15,11 +15,27 @@
   <header class="bar">
     <a class="back" href="../../" title="Все приложения" aria-label="Все приложения">‹</a>
     <h1>Змейка</h1>
-    <div class="scores">
-      <div class="pill"><span>Очки</span><b id="score">0</b></div>
-      <div class="pill"><span>Рекорд</span><b id="best">0</b></div>
-    </div>
+    <div class="pill"><span>Очки</span><b id="score">0</b></div>
   </header>
+
+  <div class="diffs" id="diffs" role="group" aria-label="Сложность">
+    <button type="button" data-diff="easy"><span>Легко</span><i>×1</i></button>
+    <button type="button" data-diff="normal" class="on"><span>Обычно</span><i>×2</i></button>
+    <button type="button" data-diff="hard"><span>Сложно</span><i>×3</i></button>
+  </div>
+
+  <div class="recs">
+    <div class="rec" id="recMine" title="Личный рекорд">
+      <span class="ico">👤</span>
+      <b id="recMineVal">0</b>
+      <span class="pos" id="recMinePos"></span>
+    </div>
+    <button class="rec" id="recGlob" type="button" hidden title="Общий рекорд — открыть таблицу">
+      <span class="ico">🌍</span>
+      <b id="recGlobVal">—</b>
+      <span class="pos" id="recGlobName"></span>
+    </button>
+  </div>
 
   <div class="stage" id="stage">
     <canvas id="c" aria-label="Игровое поле"></canvas>
@@ -40,6 +56,24 @@
   </div>
 
   <p class="hint">Стрелки или WASD, пробел — пауза, R — заново. На телефоне — свайп или кнопки.</p>
+  <p class="hint" id="hintAuth" hidden>🌍 — таблица рекордов, 👤 — твой рекорд и место.</p>
+</div>
+
+<!-- таблица рекордов -->
+<div class="sheet" id="board" hidden>
+  <div class="sheetBox" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
+    <div class="shTop">
+      <h2 id="boardTitle">Рекорды · <span id="boardDiff">Обычно</span></h2>
+      <button class="shClose" id="boardClose" type="button" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th>#</th><th>Имя</th><th>id</th><th>Рекорд</th></tr></thead>
+        <tbody id="boardRows"></tbody>
+      </table>
+    </div>
+    <p class="shNote" id="boardNote"></p>
+  </div>
 </div>
 
 <script src="app.js"></script>
