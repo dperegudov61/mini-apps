@@ -7,17 +7,17 @@
 <meta name="theme-color" content="#070d18">
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
-<script src="../../theme.js" data-i18n="strings.tsv"></script>
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="wrap">
 
   <header class="bar">
-    <a class="back" href="https://dperegudov61.github.io/" title="Home page" data-i18n-title="ui.home" aria-label="Home page" data-i18n-aria="ui.home">🏠</a>
     <h1 data-i18n="snake.name">Snake</h1>
     <div class="pill"><span data-i18n="snake.score">Score</span><b id="score">0</b></div>
-    <span class="ui-sw" data-ui="switch" data-home="0"></span>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
   </header>
 
   <div class="diffs" id="diffs" role="group" aria-label="Difficulty" data-i18n-aria="snake.difficulty">

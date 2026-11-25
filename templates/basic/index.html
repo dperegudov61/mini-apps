@@ -6,13 +6,16 @@
 <title>Название — Mini Apps</title>
 <meta name="theme-color" content="#070d18">
 <link rel="icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка (логотип, тема, язык, аккаунт) — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="wrap">
   <header class="bar">
-    <a class="back" href="../../" title="Все приложения" aria-label="Все приложения">‹</a>
     <h1>Название</h1>
+    <!-- сюда шаблон ставит логотип-ссылку на главную, значки темы и языка, кнопку аккаунта -->
+    <div class="uibar" data-ui="bar"></div>
   </header>
 
   <main class="app">

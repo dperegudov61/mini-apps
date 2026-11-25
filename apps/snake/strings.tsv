@@ -1,12 +1,4 @@
 key	en	ru
-lang.en	English	Английский
-lang.ru	Russian	Русский
-ui.theme	Theme	Тема
-ui.theme.dark	Dark	Тёмная
-ui.theme.light	Light	Светлая
-ui.theme.auto	System	Как в системе
-ui.lang	Language	Язык
-ui.home	Home page	Главная страница
 snake.title	Snake — Mini Apps	Змейка — Mini Apps
 snake.name	Snake	Змейка
 snake.score	Score	Очки
@@ -58,4 +50,4 @@ snake.rows2	· total rows:	· всего строк:
 snake.rec.bit2	· record:	· рекорд: 
 snake.score.pfx	Score:	Очки: 
 snake.to	to	к 
-snake.field.full	Field filled. Score:	Поле заполнено. Очки: 
+snake.field.full	Field filled. Score:	Поле заполнено. Очки:

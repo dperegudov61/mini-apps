@@ -78,16 +78,6 @@ body{
 
 /* ── верхняя строка ── */
 .bar{display:flex;align-items:center;gap:10px;min-height:40px}
-.back{
-  flex:none;
-  width:34px;height:34px;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:11px;
-  color:var(--dim);text-decoration:none;
-  font-size:20px;line-height:1;
-  transition:color .15s,border-color .15s,background .15s;
-}
-.back:hover,.back:focus-visible{color:var(--text);border-color:var(--line2);background:var(--surface);outline:none}
 h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em;flex:1;min-width:0}
 .pill{
   display:flex;flex-direction:column;align-items:center;

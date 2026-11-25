@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#101317">
 <title data-i18n="err.title">Page not found · Mini Apps</title>
-<script src="/mini-apps/theme.js" data-i18n="/mini-apps/strings.tsv"></script>
+<script src="/ui/ui.js" data-i18n="/mini-apps/strings.tsv"></script>
 <style>
 /* ---------- палитра: тёмная (по умолчанию) и светлая ----------
    Тот же набор переменных, что у остальных страниц (docs\THEME.md). */
@@ -36,7 +36,6 @@ body{margin:0;background:var(--bg);color:var(--tx);display:flex;align-items:cent
   padding:22px 20px 18px;box-shadow:0 18px 50px var(--shadow)}
 .top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .code{font-size:30px;font-weight:700;letter-spacing:-.5px;color:var(--tx2);line-height:1}
-.top .ui-sw{margin-left:auto}
 h1{margin:0 0 6px;font-size:20px;letter-spacing:-.2px}
 p{margin:0 0 16px;color:var(--tx2);font-size:13.5px}
 .btn{display:inline-block;padding:10px 14px;border-radius:11px;text-decoration:none;font-size:13.5px;font-weight:600;
@@ -52,11 +51,12 @@ p{margin:0 0 16px;color:var(--tx2);font-size:13.5px}
 <div class="card">
   <div class="top">
     <span class="code">404</span>
-    <span class="ui-sw" data-ui="switch"></span>
+    <!-- шапка шаблона: логотип, тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar" style="margin-left:auto"></div>
   </div>
   <h1 data-i18n="err.head">This page does not exist</h1>
   <p data-i18n="err.text">Perhaps the app was removed or the address has a typo. Everything else is one click away.</p>
-  <a class="btn" href="https://dperegudov61.github.io/" data-i18n="err.home">🏠 Home page</a>
+  <a class="btn" href="https://dperegudov61.github.io/" data-i18n="err.home">Home page</a>
   <a class="btn ghost" href="https://dperegudov61.github.io/AI-Human-Messenger/" data-i18n="err.chat">Open the chat</a>
   <div class="foot">
     <span data-i18n="err.foot">Mini Apps live inside the project page</span> ·
