@@ -267,15 +267,15 @@
 
     // фон поля
     var bg = ctx.createLinearGradient(0, 0, side, side);
-    bg.addColorStop(0, '#111d33');
-    bg.addColorStop(1, '#0a1120');
+    bg.addColorStop(0, '#16233c');
+    bg.addColorStop(1, '#0b1322');
     roundRect(0, 0, side, side, Math.min(20, cell * 1.2));
     ctx.fillStyle = bg;
     ctx.fill();
 
     // сетка
     if (cell >= 12) {
-      ctx.strokeStyle = 'rgba(120,170,255,.055)';
+      ctx.strokeStyle = 'rgba(120,170,255,.075)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (var i = 1; i < N; i++) {
