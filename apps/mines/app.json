@@ -1,0 +1,15 @@
+{
+  "id": "mines",
+  "name": "Minesweeper",
+  "nameRu": "Сапёр",
+  "description": "Classic minesweeper with three difficulty levels",
+  "descriptionRu": "Классический сапёр с тремя уровнями сложности",
+  "created": "2026-11-26",
+  "updated": "2026-11-26",
+  "version": "1.0.0",
+  "status": "ready",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "tags": ["game", "puzzle", "classic"],
+  "meta": {}
+}

@@ -1,0 +1,15 @@
+{
+  "id": "breakout",
+  "name": "Breakout",
+  "nameRu": "Арканоид",
+  "description": "Classic paddle-and-ball arcade on canvas",
+  "descriptionRu": "Классическая аркада с платформой и мячом на canvas",
+  "created": "2026-11-26",
+  "updated": "2026-11-26",
+  "version": "1.0.0",
+  "status": "ready",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "tags": ["game", "arcade", "canvas"],
+  "meta": {}
+}

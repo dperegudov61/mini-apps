@@ -1,0 +1,13 @@
+key	en	ru
+g2048.title	2048 — Mini Apps	2048 — Мини-приложения
+g2048.name	2048	2048
+g2048.score	Score	Очки
+g2048.best	Best	Рекорд
+g2048.undo	Undo	Отменить
+g2048.new	New game	Новая игра
+g2048.hint	Arrows or WASD to move, Z — undo, R — new game. On a phone — swipe.	Стрелки или WASD — ход, Z — отменить, R — новая игра. На телефоне — свайп.
+g2048.win	You win!	Победа!
+g2048.winText	You reached 2048. Score: 	Ты собрал 2048. Очки: 
+g2048.over	Game over	Игра окончена
+g2048.overText	No moves left. Score: 	Ходов больше нет. Очки: 
+g2048.cont	Continue	Продолжить

@@ -1,6 +1,50 @@
 {
-  "updated": "2026-11-25",
+  "updated": "2026-11-26",
   "apps": [
+    {
+      "id": "breakout",
+      "name": "Breakout",
+      "nameRu": "Арканоид",
+      "description": "Classic paddle-and-ball arcade on canvas",
+      "descriptionRu": "Классическая аркада с платформой и мячом на canvas",
+      "path": "apps/breakout/",
+      "icon": "apps/breakout/icon.png",
+      "tags": ["game", "arcade", "canvas"],
+      "created": "2026-11-26"
+    },
+    {
+      "id": "mines",
+      "name": "Minesweeper",
+      "nameRu": "Сапёр",
+      "description": "Classic minesweeper with three difficulty levels",
+      "descriptionRu": "Классический сапёр с тремя уровнями сложности",
+      "path": "apps/mines/",
+      "icon": "apps/mines/icon.png",
+      "tags": ["game", "puzzle", "classic"],
+      "created": "2026-11-26"
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "nameRu": "Память",
+      "description": "Find matching pairs of cards",
+      "descriptionRu": "Найди пары одинаковых карточек",
+      "path": "apps/memory/",
+      "icon": "apps/memory/icon.png",
+      "tags": ["game", "puzzle", "memory"],
+      "created": "2026-11-26"
+    },
+    {
+      "id": "2048",
+      "name": "2048",
+      "nameRu": "2048",
+      "description": "Slide the tiles and merge them up to 2048",
+      "descriptionRu": "Сдвигай плитки и собирай числа до 2048",
+      "path": "apps/2048/",
+      "icon": "apps/2048/icon.png",
+      "tags": ["game", "puzzle"],
+      "created": "2026-11-26"
+    },
     {
       "id": "snake",
       "name": "Snake",

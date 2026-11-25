@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="breakout.title">Breakout — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="breakout.name">Breakout</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <div class="hud">
+    <div class="pill"><span data-i18n="breakout.score">Score</span><b id="score">0</b></div>
+    <div class="pill"><span data-i18n="breakout.best">Best</span><b id="best">0</b></div>
+    <div class="pill"><span data-i18n="breakout.level">Level</span><b id="level">1</b></div>
+    <div class="pill"><span data-i18n="breakout.lives">Lives</span><b id="lives">♥♥♥</b></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="c" aria-label="Playfield" data-i18n-aria="breakout.field"></canvas>
+    <div class="overlay" id="ov">
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+        <h2 id="ovTitle" data-i18n="breakout.name">Breakout</h2>
+        <p id="ovText" data-i18n="breakout.startHint">Move the paddle, keep the ball in play and break every brick.</p>
+        <button class="btn" id="ovBtn" type="button" data-i18n="breakout.play">Play</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" data-i18n="breakout.hint">Arrows or A/D, space — pause. On a phone — drag on the field.</p>
+  <p class="hint" id="launch" hidden data-i18n="breakout.launch">Tap the field to launch the ball.</p>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

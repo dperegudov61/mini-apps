@@ -1,0 +1,18 @@
+key	en	ru
+breakout.title	Breakout — Mini Apps	Арканоид — Мини-приложения
+breakout.name	Breakout	Арканоид
+breakout.score	Score	Очки
+breakout.best	Best	Рекорд
+breakout.level	Level	Уровень
+breakout.lives	Lives	Жизни
+breakout.field	Playfield	Игровое поле
+breakout.play	Play	Играть
+breakout.again	Once more	Ещё раз
+breakout.cont	Continue	Продолжить
+breakout.pause	Paused	Пауза
+breakout.pauseHint	Space — continue.	Пробел — продолжить.
+breakout.over	Game over	Игра окончена
+breakout.overText	Score: 	Очки: 
+breakout.startHint	Move the paddle, keep the ball in play and break every brick.	Двигай платформу, не теряй мяч и разбей все кирпичи.
+breakout.hint	Arrows or A/D, space — pause. On a phone — drag on the field.	Стрелки или A/D, пробел — пауза. На телефоне — веди пальцем по полю.
+breakout.launch	Tap the field to launch the ball.	Коснись поля, чтобы запустить мяч.

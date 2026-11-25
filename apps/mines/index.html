@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="mines.title">Minesweeper — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="mines.name">Minesweeper</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <div class="hud">
+    <div class="pill"><span data-i18n="mines.left">Mines</span><b id="left">10</b></div>
+    <div class="pill"><span data-i18n="mines.time">Time</span><b id="time">0:00</b></div>
+    <div class="spacer"></div>
+    <button class="btn" id="newGame" type="button" data-i18n="mines.new">New game</button>
+  </div>
+
+  <div class="diffs" id="diffs" role="group" aria-label="Difficulty" data-i18n-aria="mines.difficulty">
+    <button type="button" data-level="easy" class="on"><span data-i18n="mines.easy">Easy</span><i>9×9</i></button>
+    <button type="button" data-level="normal"><span data-i18n="mines.normal">Normal</span><i>12×12</i></button>
+    <button type="button" data-level="hard"><span data-i18n="mines.hard">Hard</span><i>14×14</i></button>
+  </div>
+
+  <div class="stage">
+    <div class="grid" id="grid" role="grid" aria-label="Minefield" data-i18n-aria="mines.field"></div>
+    <div class="overlay hidden" id="ov">
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+        <h2 id="ovTitle"></h2>
+        <p id="ovText"></p>
+        <button class="btn" id="ovBtn" type="button" data-i18n="mines.again">Once more</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" data-i18n="mines.hint">Click to open a cell. Right click (or long press on a phone) — flag. The first click never hits a mine.</p>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

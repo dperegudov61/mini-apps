@@ -1,0 +1,19 @@
+key	en	ru
+mines.title	Minesweeper — Mini Apps	Сапёр — Мини-приложения
+mines.name	Minesweeper	Сапёр
+mines.left	Mines	Мины
+mines.time	Time	Время
+mines.new	New game	Новая игра
+mines.again	Once more	Ещё раз
+mines.easy	Easy	Легко
+mines.normal	Normal	Обычно
+mines.hard	Hard	Сложно
+mines.difficulty	Difficulty	Сложность
+mines.field	Minefield	Минное поле
+mines.win	You win!	Победа!
+mines.winText	Time: 	Время: 
+mines.record	New record!	Новый рекорд!
+mines.best	Best	Рекорд
+mines.over	Boom!	Бум!
+mines.overText	A mine went off. Try again.	Мина взорвалась. Попробуй ещё раз.
+mines.hint	Click to open a cell. Right click (or long press on a phone) — flag. The first click never hits a mine.	Щелчок — открыть клетку. Правая кнопка (или долгое нажатие на телефоне) — флажок. Первый щелчок никогда не попадает в мину.

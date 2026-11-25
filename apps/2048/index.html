@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="g2048.title">2048 — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="g2048.name">2048</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <div class="hud">
+    <div class="pill"><span data-i18n="g2048.score">Score</span><b id="score">0</b></div>
+    <div class="pill"><span data-i18n="g2048.best">Best</span><b id="best">0</b></div>
+    <div class="spacer"></div>
+    <button class="btn2" id="undo" type="button" data-i18n="g2048.undo">Undo</button>
+    <button class="btn" id="newGame" type="button" data-i18n="g2048.new">New game</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="grid" id="grid" aria-hidden="true"></div>
+    <div class="tiles" id="tiles" aria-hidden="true"></div>
+    <div class="overlay hidden" id="ov">
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+        <h2 id="ovTitle"></h2>
+        <p id="ovText"></p>
+        <button class="btn" id="ovBtn" type="button"></button>
+        <button class="btn2 wide" id="ovBtn2" type="button" hidden></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" data-i18n="g2048.hint">Arrows or WASD to move, Z — undo, R — new game. On a phone — swipe.</p>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "id": "memory",
+  "name": "Memory",
+  "nameRu": "Память",
+  "description": "Find matching pairs of cards",
+  "descriptionRu": "Найди пары одинаковых карточек",
+  "created": "2026-11-26",
+  "updated": "2026-11-26",
+  "version": "1.0.0",
+  "status": "ready",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "tags": ["game", "puzzle", "memory"],
+  "meta": {}
+}

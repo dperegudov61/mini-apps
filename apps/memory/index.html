@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="memory.title">Memory — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="memory.name">Memory</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <div class="hud">
+    <div class="pill"><span data-i18n="memory.pairs">Pairs</span><b id="pairs">0/8</b></div>
+    <div class="pill"><span data-i18n="memory.moves">Moves</span><b id="moves">0</b></div>
+    <div class="pill"><span data-i18n="memory.time">Time</span><b id="time">0:00</b></div>
+    <div class="spacer"></div>
+    <button class="btn" id="newGame" type="button" data-i18n="memory.new">New game</button>
+  </div>
+
+  <div class="diffs" id="diffs" role="group" aria-label="Difficulty" data-i18n-aria="memory.difficulty">
+    <button type="button" data-size="easy" class="on"><span data-i18n="memory.easy">Easy</span><i>4×4</i></button>
+    <button type="button" data-size="normal"><span data-i18n="memory.normal">Normal</span><i>5×4</i></button>
+    <button type="button" data-size="hard"><span data-i18n="memory.hard">Hard</span><i>6×6</i></button>
+  </div>
+
+  <div class="stage">
+    <div class="board" id="board"></div>
+    <div class="overlay hidden" id="ov">
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+        <h2 id="ovTitle" data-i18n="memory.done">All pairs found!</h2>
+        <p id="ovText"></p>
+        <button class="btn" id="ovBtn" type="button" data-i18n="memory.again">Once more</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" data-i18n="memory.hint">Open two cards with the same picture. The clock starts on the first move.</p>
+  <p class="hint" id="bestHint"></p>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
