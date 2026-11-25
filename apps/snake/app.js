@@ -19,9 +19,9 @@
   var SHOW = 20;           // сколько строк таблицы показывать
 
   var DIFFS = {
-    easy:   { name: 'Легко',  mult: 1, start: 200, min: 95 },
-    normal: { name: 'Обычно', mult: 2, start: 165, min: 70 },
-    hard:   { name: 'Сложно', mult: 3, start: 130, min: 55 }
+    easy:   { name: t("snake.easy", "Easy"),  mult: 1, start: 200, min: 95 },
+    normal: { name: t("snake.normal", "Normal"), mult: 2, start: 165, min: 70 },
+    hard:   { name: t("snake.hard", "Hard"), mult: 3, start: 130, min: 55 }
   };
   var ORDER = ['easy', 'normal', 'hard'];
 
@@ -215,8 +215,8 @@
       opt.body = JSON.stringify(body);
     }
     return fetchJSON(srv.url + path, opt, 10000).then(function (r) {
-      if (r.status === 401) { var e = new Error('нужен вход'); e.noauth = true; throw e; }
-      if (!r.ok || !r.json || r.json.ok !== true) throw new Error('сервер: ' + r.status);
+      if (r.status === 401) { var e = new Error(t("snake.need.login", "Sign in needed")); e.noauth = true; throw e; }
+      if (!r.ok || !r.json || r.json.ok !== true) throw new Error(t('snake.server', 'server:') + ' ' + r.status);
       return r.json;
     });
   }
@@ -258,7 +258,7 @@
       if (u) return u;
       return findServer();
     }).then(function (u) {
-      if (!u) throw new Error('сервер не найден');
+      if (!u) throw new Error(t("snake.no.server", "server not found"));
       srv.url = u;
       lss('door.url', u);
       return api('/mini-apps/snake/records?difficulty=' + diff);
@@ -280,7 +280,7 @@
   function renderRecs() {
     recMineVal.textContent = fmt(bests[diff]);
     if (srv.authed && srv.place > 0) {
-      recMinePos.textContent = 'место ' + srv.place;
+      recMinePos.textContent = t('snake.place', 'place') + ' ' + srv.place;
       recMinePos.className = 'pos ' + placeClass(srv.place);
     } else {
       recMinePos.textContent = '';
@@ -290,7 +290,7 @@
       recGlobVal.textContent = fmt(srv.top[0].score);
       recGlobName.textContent = srv.top[0].name;
       recGlob.hidden = false;
-      recGlob.title = 'Общий рекорд: ' + srv.top[0].name + ' — ' + srv.top[0].score + '. Открыть таблицу';
+      recGlob.title = t('snake.global.rec', 'Overall record:') + ' ' + srv.top[0].name + ' — ' + srv.top[0].score + t("snake.open.board", ". Open the table");
     } else {
       recGlob.hidden = true;
     }
@@ -315,9 +315,9 @@
       : '<tr><td colspan="4" class="empty">Пока никто не играл на этой сложности — будь первым.</td></tr>';
 
     if (srv.place > 0 && !mine) {
-      boardNote.textContent = 'Твоё место: ' + srv.place + ' из ' + srv.players + ' · рекорд ' + fmt(bests[diff]);
+      boardNote.textContent = t('snake.your.place', 'Your place:') + ' ' + srv.place + t('snake.of', ' of ') + srv.players + ' ' + t('snake.rec.bit', '· record') + ' ' + fmt(bests[diff]);
     } else if (srv.players > 0) {
-      boardNote.textContent = 'Игроков: ' + srv.players + ' · всего строк: ' + Math.min(SHOW, rows.length);
+      boardNote.textContent = t('snake.players', 'Players:') + ' ' + srv.players + t('snake.rows2', ' · total rows: ') + ' ' + Math.min(SHOW, rows.length);
     } else {
       boardNote.textContent = '';
     }
@@ -356,14 +356,14 @@
     srv.best = 0;
     reset();
     if (wasPlaying) { state = 'playing'; hideOverlay(); }
-    else { state = 'idle'; showOverlay('Змейка', intro(), 'Играть'); }
+    else { state = 'idle'; showOverlay(t("snake.name", "Snake"), intro(), t("snake.play", "Play")); }
     renderRecs();
     loadRecords();
   }
 
   function intro() {
-    return 'Яблоко: ×' + DIFFS[diff].mult + ' (' + DIFFS[diff].name + ').<br>' +
-           'Стрелки или WASD — движение, пробел — пауза.';
+    return t("snake.apple", "Apple: ×") + DIFFS[diff].mult + ' (' + DIFFS[diff].name + ').<br>' +
+           t("snake.hint2", "Arrows or WASD to move, space — pause.");
   }
 
   /* ─────────── размер поля ─────────── */
@@ -450,7 +450,7 @@
   function togglePause() {
     if (state === 'playing') {
       state = 'paused';
-      showOverlay('Пауза', 'Пробел — продолжить, R — заново.', 'Продолжить');
+      showOverlay(t("snake.pause", "Paused"), t("snake.pause.hint", "Space — continue, R — restart."), t("snake.resume", "Continue"));
     } else if (state === 'paused') {
       state = 'playing';
       last = 0;
@@ -460,10 +460,10 @@
   }
 
   function overText() {
-    var s = 'Очки: ' + fmt(score) + ' · рекорд: ' + fmt(bests[diff]) + '.';
+    var s = t('snake.score.pfx', 'Score:') + ' ' + fmt(score) + t('snake.rec.bit2', ' · record: ') + ' ' + fmt(bests[diff]) + '.';
     if (srv.authed) {
-      if (srv.place > 0) s += '<br>Место: ' + srv.place + ' из ' + srv.players + '.';
-      else s += '<br>Рекорд не вошёл в таблицу.';
+      if (srv.place > 0) s += t('snake.br.place', '<br>Place:') + ' ' + srv.place + t('snake.of', ' of ') + srv.players + '.';
+      else s += t("snake.br.notop", "<br>The record did not make the table.");
     }
     return s;
   }
@@ -474,7 +474,7 @@
     var isNew = score > bests[diff];
     setBest(diff, score);
     renderRecs();
-    showOverlay(isNew && score > 0 ? 'Новый рекорд!' : 'Игра окончена', overText(), 'Ещё раз');
+    showOverlay(isNew && score > 0 ? t("snake.new.rec", "New record!") : t("snake.over", "Game over"), overText(), t("snake.again", "Once more"));
     submit(score).then(function () { if (state === 'over') ovText.innerHTML = overText(); });
   }
 
@@ -482,7 +482,7 @@
     state = 'over';
     setBest(diff, score);
     renderRecs();
-    showOverlay('Победа!', 'Поле заполнено. Очки: ' + fmt(score) + '.', 'Заново');
+    showOverlay(t("snake.win", "Victory!"), t('snake.field.full', 'Field filled. Score:') + ' ' + fmt(score) + '.', t("snake.restart", "Restart"));
     submit(score);
   }
 
@@ -537,7 +537,7 @@
       if (state !== 'playing') start();
       return;
     }
-    if (key === 'r' || key === 'к') {
+    if (key === 'r' || key === t('snake.to', 'to')) {
       e.preventDefault();
       start();
     }
@@ -592,21 +592,35 @@
   board.addEventListener('click', function (e) { if (e.target === board) closeBoard(); });
 
   /* ─────────── рисование ─────────── */
+  // цвета поля берём из переменных страницы: тема переключается — поле перекрашивается
+  var pal = null;
+  function palette() {
+    var th = document.documentElement.getAttribute('data-theme') || 'dark';
+    if (pal && pal.th === th) return pal;
+    var st = window.getComputedStyle ? getComputedStyle(document.documentElement) : null;
+    function v(n, d) { var s = st ? st.getPropertyValue(n).trim() : ''; return s || d; }
+    pal = { th: th,
+      bg0: v('--board0', '#16233c'), bg1: v('--board1', '#0b1322'),
+      grid: v('--grid', 'rgba(120,170,255,.075)'), grid2: v('--grid2', 'rgba(120,170,255,.14)') };
+    return pal;
+  }
+
   function draw() {
     var side = cell * N;
     if (!side) return;
 
     ctx.clearRect(0, 0, side, side);
 
+    var pl = palette();
     var bg = ctx.createLinearGradient(0, 0, side, side);
-    bg.addColorStop(0, '#16233c');
-    bg.addColorStop(1, '#0b1322');
+    bg.addColorStop(0, pl.bg0);
+    bg.addColorStop(1, pl.bg1);
     roundRect(0, 0, side, side, Math.min(20, cell * 1.2));
     ctx.fillStyle = bg;
     ctx.fill();
 
     if (cell >= 12) {
-      ctx.strokeStyle = 'rgba(120,170,255,.075)';
+      ctx.strokeStyle = pl.grid;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (var i = 1; i < N; i++) {
@@ -618,7 +632,7 @@
     }
 
     // рамка поля
-    ctx.strokeStyle = 'rgba(120,170,255,.14)';
+    ctx.strokeStyle = pl.grid2;
     ctx.lineWidth = 2;
     roundRect(1, 1, side - 2, side - 2, Math.min(20, cell * 1.2));
     ctx.stroke();
@@ -703,6 +717,9 @@
     }
   }
 
+  // тема поменялась — поле перерисовать
+  if (window.UI) UI.onChange = function () { pal = null; try { draw(); } catch (e) {} };
+
   /* ─────────── главный цикл ─────────── */
   function loop(t) {
     requestAnimationFrame(loop);
@@ -736,7 +753,7 @@
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
-  showOverlay('Змейка', intro(), 'Играть');
+  showOverlay(t("snake.name", "Snake"), intro(), t("snake.play", "Play"));
   renderRecs();
   loadRecords();
   requestAnimationFrame(loop);

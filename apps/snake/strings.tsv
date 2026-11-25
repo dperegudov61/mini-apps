@@ -1,0 +1,61 @@
+key	en	ru
+lang.en	English	Английский
+lang.ru	Russian	Русский
+ui.theme	Theme	Тема
+ui.theme.dark	Dark	Тёмная
+ui.theme.light	Light	Светлая
+ui.theme.auto	System	Как в системе
+ui.lang	Language	Язык
+ui.home	Home page	Главная страница
+snake.title	Snake — Mini Apps	Змейка — Mini Apps
+snake.name	Snake	Змейка
+snake.score	Score	Очки
+snake.easy	Easy	Легко
+snake.normal	Normal	Обычно
+snake.hard	Hard	Сложно
+snake.difficulty	Difficulty	Сложность
+snake.start.hint	Arrows or WASD to move. Space — pause, R — restart.	Стрелки или WASD — движение. Пробел — пауза, R — заново.
+snake.play	Play	Играть
+snake.hint	Arrows or WASD, space — pause, R — restart. On a phone — swipe or the buttons.	Стрелки или WASD, пробел — пауза, R — заново. На телефоне — свайп или кнопки.
+snake.hint.auth	🌍 — highscores table, 👤 — your record and place.	🌍 — таблица рекордов, 👤 — твой рекорд и место.
+snake.mine	Personal record	Личный рекорд
+snake.global	Overall record — open the table	Общий рекорд — открыть таблицу
+snake.field	Playfield	Игровое поле
+snake.up	Up	Вверх
+snake.left	Left	Влево
+snake.down	Down	Вниз
+snake.right	Right	Вправо
+snake.close	Close	Закрыть
+snake.board.title	Highscores ·	Рекорды ·
+snake.col.name	Name	Имя
+snake.col.score	Record	Рекорд
+snake.home	Home page	Все приложения
+snake.empty	Nobody has played this difficulty yet — be the first.	Пока никто не играл на этой сложности — будь первым.
+snake.place	Place: 	Место: 
+snake.need.login	Sign in needed	нужен вход
+snake.no.server	server not found	сервер не найден
+snake.global.rec	Overall record:	Общий рекорд:
+snake.open.board	. Open the table	. Открыть таблицу
+snake.your.place	Your place:	Твоё место:
+snake.players	Players:	Игроков:
+snake.rows	· total rows:	· всего строк:
+snake.apple	Apple: ×	Яблоко: ×
+snake.hint2	Arrows or WASD to move, space — pause.	Стрелки или WASD — движение, пробел — пауза.
+snake.pause	Paused	Пауза
+snake.pause.hint	Space — continue, R — restart.	Пробел — продолжить, R — заново.
+snake.resume	Continue	Продолжить
+snake.br.place	<br>Place:	<br>Место:
+snake.br.notop	<br>The record did not make the table.	<br>Рекорд не вошёл в таблицу.
+snake.new.rec	New record!	Новый рекорд!
+snake.over	Game over	Игра окончена
+snake.again	Once more	Ещё раз
+snake.win	Victory!	Победа!
+snake.restart	Restart	Заново
+snake.server	server:	сервер: 
+snake.of	of	из 
+snake.rec.bit	· record	· рекорд 
+snake.rows2	· total rows:	· всего строк: 
+snake.rec.bit2	· record:	· рекорд: 
+snake.score.pfx	Score:	Очки: 
+snake.to	to	к 
+snake.field.full	Field filled. Score:	Поле заполнено. Очки: 

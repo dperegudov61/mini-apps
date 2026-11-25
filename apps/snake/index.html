@@ -3,34 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Змейка — Mini Apps</title>
+<title data-i18n="snake.title">Snake — Mini Apps</title>
 <meta name="theme-color" content="#070d18">
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
+<script src="../../theme.js" data-i18n="strings.tsv"></script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="wrap">
 
   <header class="bar">
-    <a class="back" href="../../" title="Все приложения" aria-label="Все приложения">‹</a>
-    <h1>Змейка</h1>
-    <div class="pill"><span>Очки</span><b id="score">0</b></div>
+    <a class="back" href="https://dperegudov61.github.io/" title="Home page" data-i18n-title="ui.home" aria-label="Home page" data-i18n-aria="ui.home">🏠</a>
+    <h1 data-i18n="snake.name">Snake</h1>
+    <div class="pill"><span data-i18n="snake.score">Score</span><b id="score">0</b></div>
+    <span class="ui-sw" data-ui="switch" data-home="0"></span>
   </header>
 
-  <div class="diffs" id="diffs" role="group" aria-label="Сложность">
-    <button type="button" data-diff="easy"><span>Легко</span><i>×1</i></button>
-    <button type="button" data-diff="normal" class="on"><span>Обычно</span><i>×2</i></button>
-    <button type="button" data-diff="hard"><span>Сложно</span><i>×3</i></button>
+  <div class="diffs" id="diffs" role="group" aria-label="Difficulty" data-i18n-aria="snake.difficulty">
+    <button type="button" data-diff="easy"><span data-i18n="snake.easy">Easy</span><i>×1</i></button>
+    <button type="button" data-diff="normal" class="on"><span data-i18n="snake.normal">Normal</span><i>×2</i></button>
+    <button type="button" data-diff="hard"><span data-i18n="snake.hard">Hard</span><i>×3</i></button>
   </div>
 
   <div class="recs">
-    <div class="rec" id="recMine" title="Личный рекорд">
+    <div class="rec" id="recMine" title="Personal record" data-i18n-title="snake.mine">
       <span class="ico">👤</span>
       <b id="recMineVal">0</b>
       <span class="pos" id="recMinePos"></span>
     </div>
-    <button class="rec" id="recGlob" type="button" hidden title="Общий рекорд — открыть таблицу">
+    <button class="rec" id="recGlob" type="button" hidden title="Overall record — open the table" data-i18n-title="snake.global">
       <span class="ico">🌍</span>
       <b id="recGlobVal">—</b>
       <span class="pos" id="recGlobName"></span>
@@ -38,37 +40,37 @@
   </div>
 
   <div class="stage" id="stage">
-    <canvas id="c" aria-label="Игровое поле"></canvas>
+    <canvas id="c" aria-label="Playfield" data-i18n-aria="snake.field"></canvas>
     <div class="overlay" id="ov">
       <div class="panel">
-        <h2 id="ovTitle">Змейка</h2>
-        <p id="ovText">Стрелки или WASD — движение.<br>Пробел — пауза, R — заново.</p>
-        <button class="btn" id="btn" type="button">Играть</button>
+        <h2 id="ovTitle" data-i18n="snake.name">Snake</h2>
+        <p id="ovText"><span data-i18n="snake.hint2">Arrows or WASD to move, space — pause.</span></p>
+        <button class="btn" id="btn" type="button" data-i18n="snake.play">Play</button>
       </div>
     </div>
   </div>
 
   <div class="pad" id="pad" aria-hidden="true">
-    <button type="button" class="key up" data-dir="up" aria-label="Вверх">▲</button>
-    <button type="button" class="key left" data-dir="left" aria-label="Влево">◀</button>
-    <button type="button" class="key down" data-dir="down" aria-label="Вниз">▼</button>
-    <button type="button" class="key right" data-dir="right" aria-label="Вправо">▶</button>
+    <button type="button" class="key up" data-dir="up" aria-label="Up" data-i18n-aria="snake.up">▲</button>
+    <button type="button" class="key left" data-dir="left" aria-label="Left" data-i18n-aria="snake.left">◀</button>
+    <button type="button" class="key down" data-dir="down" aria-label="Down" data-i18n-aria="snake.down">▼</button>
+    <button type="button" class="key right" data-dir="right" aria-label="Right" data-i18n-aria="snake.right">▶</button>
   </div>
 
-  <p class="hint">Стрелки или WASD, пробел — пауза, R — заново. На телефоне — свайп или кнопки.</p>
-  <p class="hint" id="hintAuth" hidden>🌍 — таблица рекордов, 👤 — твой рекорд и место.</p>
+  <p class="hint" data-i18n="snake.hint">Arrows or WASD, space — pause, R — restart. On a phone — swipe or the buttons.</p>
+  <p class="hint" id="hintAuth" hidden data-i18n="snake.hint.auth">🌍 — highscores table, 👤 — your record and place.</p>
 </div>
 
 <!-- таблица рекордов -->
 <div class="sheet" id="board" hidden>
   <div class="sheetBox" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
     <div class="shTop">
-      <h2 id="boardTitle">Рекорды · <span id="boardDiff">Обычно</span></h2>
-      <button class="shClose" id="boardClose" type="button" aria-label="Закрыть">✕</button>
+      <h2 id="boardTitle"><span data-i18n="snake.board.title">Highscores ·</span> <span id="boardDiff" data-i18n="snake.normal">Normal</span></h2>
+      <button class="shClose" id="boardClose" type="button" aria-label="Close" data-i18n-aria="snake.close">✕</button>
     </div>
     <div class="tableWrap">
       <table>
-        <thead><tr><th>#</th><th>Имя</th><th>id</th><th>Рекорд</th></tr></thead>
+        <thead><tr><th>#</th><th data-i18n="snake.col.name">Name</th><th>id</th><th data-i18n="snake.col.score">Record</th></tr></thead>
         <tbody id="boardRows"></tbody>
       </table>
     </div>

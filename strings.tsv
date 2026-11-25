@@ -1,0 +1,15 @@
+key	en	ru
+lang.en	English	Английский
+lang.ru	Russian	Русский
+ui.theme	Theme	Тема
+ui.theme.dark	Dark	Тёмная
+ui.theme.light	Light	Светлая
+ui.theme.auto	System	Как в системе
+ui.lang	Language	Язык
+ui.home	Home page	Главная страница
+err.title	Page not found · Mini Apps	Страница не найдена · Mini Apps
+err.head	This page does not exist	Такой страницы нет
+err.text	Perhaps the app was removed or the address has a typo. Everything else is one click away.	Возможно, приложение убрали или в адресе опечатка. Всё остальное — в одном нажатии.
+err.home	🏠 Home page	🏠 На главную
+err.chat	Open the chat	Открыть чат
+err.foot	Mini Apps live inside the project page	Мини-приложения живут на странице проектов
