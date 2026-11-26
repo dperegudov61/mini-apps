@@ -1,0 +1,15 @@
+{
+  "id": "game-engine",
+  "name": "Game engine",
+  "nameRu": "Игровой движок",
+  "description": "WebGPU engine skeleton: a WGSL shader in a frame, values and a texture coming from the CPU",
+  "descriptionRu": "Каркас движка на WebGPU: шейдер WGSL в рамке, значения и текстура с процессора",
+  "created": "2026-11-26",
+  "updated": "2026-11-26",
+  "version": "1.0.0",
+  "status": "draft",
+  "entry": "index.html",
+  "icon": "icon.png",
+  "tags": ["engine", "webgpu", "shader", "graphics"],
+  "meta": {}
+}

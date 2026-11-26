@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="game-engine.title">Game engine — Mini Apps</title>
+<meta name="theme-color" content="#070d18">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<!-- общий шаблон: тема, язык и шапка — один файл на весь сайт -->
+<script src="/ui/ui.js" data-i18n="strings.tsv"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <h1 data-i18n="game-engine.name">Game engine</h1>
+    <!-- шапка шаблона: логотип (на главную), тема, язык, аккаунт (рисует /ui/ui.js) -->
+    <div class="uibar" data-ui="bar"></div>
+  </header>
+
+  <div class="frame">
+    <div class="frame-top">
+      <span class="file">shaders/render.wgsl</span>
+      <span class="badge" id="frame-size">—</span>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <canvas id="gpu-canvas"></canvas>
+      <i class="corner tl"></i><i class="corner tr"></i>
+      <i class="corner bl"></i><i class="corner br"></i>
+      <div class="overlay" id="overlay" hidden></div>
+    </div>
+
+    <div class="frame-bottom" data-i18n="game-engine.frameNote">texture from CPU · values from CPU · game logic on CPU</div>
+  </div>
+
+  <p class="sub" id="gpu-info">GPU: —</p>
+
+  <div class="metrics">
+    <div class="metric"><span class="k" data-i18n="game-engine.fps">fps</span><span class="v" id="m-fps">—</span></div>
+    <div class="metric"><span class="k" data-i18n="game-engine.frame">frame</span><span class="v" id="m-frame">—</span></div>
+    <div class="metric"><span class="k" data-i18n="game-engine.res">resolution</span><span class="v" id="m-res">—</span></div>
+    <div class="metric"><span class="k" data-i18n="game-engine.upload">cpu → gpu</span><span class="v" id="m-up">—</span></div>
+  </div>
+
+  <section class="panel">
+    <h2 data-i18n="game-engine.params">Values from CPU</h2>
+    <p class="sub" data-i18n="game-engine.paramsNote">sliders write into the uniform buffer the shader reads</p>
+    <div id="controls" class="controls"></div>
+
+    <h2 data-i18n="game-engine.check">Shader launch check</h2>
+    <p class="sub" data-i18n="game-engine.checkNote">WGSL compile, frame drawn, compute smoke test</p>
+    <div id="tests" class="tests"></div>
+
+    <div class="row-actions">
+      <button id="btn-test" type="button" data-i18n="game-engine.run">Run check</button>
+      <button id="btn-pause" class="ghost" type="button" data-i18n="game-engine.pause">Pause</button>
+      <button id="btn-reset" class="ghost" type="button" data-i18n="game-engine.reset">Reset</button>
+    </div>
+    <p class="note" data-i18n="game-engine.note">Only the launch is checked at this stage; comparing values CPU ↔ GPU is the next step.</p>
+  </section>
+
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/shaders.js"></script>
+<script src="js/gpu.js"></script>
+<script src="js/texture.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/game.js"></script>
+<script src="js/input.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/selftest.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

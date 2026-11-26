@@ -1,0 +1,42 @@
+key	en	ru
+game-engine.title	Game engine — Mini Apps	Игровой движок — Мини-приложения
+game-engine.name	Game engine	Игровой движок
+game-engine.frameNote	texture from CPU · values from CPU · game logic on CPU	текстура с процессора · значения с процессора · игровая логика на CPU
+game-engine.fps	fps	fps
+game-engine.frame	frame	кадр
+game-engine.res	resolution	разрешение
+game-engine.upload	cpu → gpu	загрузка CPU → GPU
+game-engine.params	Values from CPU	Значения с процессора
+game-engine.paramsNote	sliders write into the uniform buffer the shader reads	слайдеры пишут в uniform-буфер, шейдер их читает
+game-engine.check	Shader launch check	Проверка запуска шейдеров
+game-engine.checkNote	WGSL compile, frame drawn, compute smoke test	компиляция WGSL, отрисовка кадра, дымовой compute-тест
+game-engine.run	Run check	Прогнать тест
+game-engine.checking	Checking…	Проверяю…
+game-engine.pause	Pause	Пауза
+game-engine.resume	Resume	Продолжить
+game-engine.reset	Reset	Сброс
+game-engine.note	Only the launch is checked at this stage; comparing values CPU ↔ GPU is the next step.	На этом этапе проверяется только запуск; сверка значений CPU ↔ GPU — следующим шагом.
+game-engine.empty	the check has not run yet	тест ещё не запускался
+game-engine.speed	logic speed	скорость логики
+game-engine.mouse	mouse pull	притяжение к мыши
+game-engine.texmix	texture mix	микс текстуры
+game-engine.hue	palette shift	сдвиг палитры
+game-engine.renderShader	render shader	рендер-шейдер
+game-engine.computeShader	compute shader	compute-шейдер
+game-engine.frameInfo	frame {0}×{1}, pixel #{2}, shades in row: {3}	кадр {0}×{1}, пиксель #{2}, оттенков в строке: {3}
+game-engine.frameEmpty	frame {0}×{1} — the shader drew nothing	кадр {0}×{1} — шейдер ничего не нарисовал
+game-engine.gpuError	GPU error: {0}	ошибка GPU: {0}
+game-engine.computeFail	the compute shader did not start	compute-шейдер не запустился
+game-engine.markerOk	marker 0x{0}, workgroup 1×1×1 done	метка 0x{0}, workgroup 1×1×1 выполнился
+game-engine.markerBad	no marker, first word 0x{0}	метки нет: первое слово 0x{0}
+game-engine.sumOk	shaders launched, the frame is drawn	шейдеры запустились, кадр рисуется
+game-engine.sumBad	a shader did not launch — see the rows above	шейдер не запустился — разбор в строках выше
+game-engine.gpuAsking	asking for an adapter…	запрос адаптера…
+game-engine.failTitle	the engine did not start	движок не запустился
+game-engine.fail1	Open the app by its web address: from a local disk a browser does not let it read the shader files.	Открывайте приложение по веб-адресу: с локального диска браузер не даёт читать файлы шейдеров.
+game-engine.fail2	A browser with WebGPU is required (Chrome or Edge 113+).	Нужен браузер с WebGPU (Chrome или Edge 113+).
+game-engine.fail3	No adapter? Check WebGPU in the browser settings and update the graphics driver.	Нет адаптера? Проверьте WebGPU в настройках браузера и обновите драйвер видеокарты.
+game-engine.errNoFetch	Could not load shader files. Open the app by its web address: a browser does not read side files from a local disk.	Не удалось загрузить файлы шейдеров. Откройте приложение по веб-адресу: с локального диска браузер не читает соседние файлы.
+game-engine.errNoWebGPU	This browser has no navigator.gpu — WebGPU is unavailable.	В браузере нет navigator.gpu — WebGPU недоступен.
+game-engine.errNoAdapter	No GPU adapter: WebGPU may be disabled or there is no suitable driver.	Не удалось получить GPU-адаптер: WebGPU выключен или нет подходящего драйвера.
+game-engine.errLost	GPU device lost	GPU-устройство потеряно

@@ -2,6 +2,17 @@
   "updated": "2026-11-26",
   "apps": [
     {
+      "id": "game-engine",
+      "name": "Game engine",
+      "nameRu": "Игровой движок",
+      "description": "WebGPU engine skeleton: a WGSL shader in a frame, values and a texture coming from the CPU",
+      "descriptionRu": "Каркас движка на WebGPU: шейдер WGSL в рамке, значения и текстура с процессора",
+      "path": "apps/game-engine/",
+      "icon": "apps/game-engine/icon.png",
+      "tags": ["engine", "webgpu", "shader", "graphics"],
+      "created": "2026-11-26"
+    },
+    {
       "id": "viewer",
       "name": "HTML viewer",
       "nameRu": "Подсмотрщик HTML",
