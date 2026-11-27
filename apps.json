@@ -5,11 +5,11 @@
       "id": "game-engine",
       "name": "Game engine",
       "nameRu": "Игровой движок",
-      "description": "WebGPU engine skeleton: a WGSL shader in a frame, values and a texture coming from the CPU",
-      "descriptionRu": "Каркас движка на WebGPU: шейдер WGSL в рамке, значения и текстура с процессора",
+      "description": "WebGPU engine skeleton: analytic ray tracing, switchable CPU scenes, a sphere-cube benchmark and frame-time tools",
+      "descriptionRu": "Каркас движка на WebGPU: аналитическая трассировка лучей, переключаемые сцены на процессоре, бенчмарк из куба сфер и инструменты времени кадра",
       "path": "apps/game-engine/",
       "icon": "apps/game-engine/icon.png",
-      "tags": ["engine", "webgpu", "shader", "graphics"],
+      "tags": ["engine", "webgpu", "shader", "graphics", "benchmark"],
       "created": "2026-11-26"
     },
     {

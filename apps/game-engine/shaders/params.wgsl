@@ -1,21 +1,36 @@
-// params.wgsl — общая структура значений, которые процессор присылает на GPU.
-// Подключается в render.wgsl через "//#include params.wgsl" (см. js/shaders.js).
+// params.wgsl — значения, которые процессор присылает на GPU один раз за кадр.
+// Подключается в scene.wgsl директивой "//#include params.wgsl" (см. js/gfx/shaders.js).
 //
-// Порядок полей обязан совпадать с раскладкой Float32Array(16) на стороне JS:
-// см. js/game.js → writeParams().
+// Порядок полей обязан совпадать с раскладкой Float32Array(40) на стороне JS:
+// единственное место, где он задан, — js/scene/pack.js → GE.writeFrame().
 //
-// Смещения (байты): resolution 0, mouse 8, ball 16, time 28,
-//                   hueShift 32, texMix 36, wave 40, frame 44, extra 48.
-// Размер структуры: 64 байта.
+// Смещения (байты):
+//   resolution   0    размер кадра в пикселях
+//   fov          8    вертикальный угол обзора, радианы
+//   time         12   игровое время, секунды
+//   camPos       16   .xyz позиция камеры
+//   camForward   32   .xyz направление взгляда
+//   camRight     48   .xyz вправо
+//   camUp        64   .xyz вверх
+//   sunDir       80   .xyz направление НА солнце (единичное)
+//   sunColor     96   .rgb цвет солнца, .w сила (0 — солнце под горизонтом)
+//   skyAmbient   112  .rgb цвет скайбокс-света (день/ночь, считает процессор)
+//   counts       128  .x сферы, .y конусы, .z кубы (u32)
+//   extra        144  .x яркость, .y тени (0/1), .z звёзды (0/1), .w разметка земли (0/1)
+//
+// Размер структуры: 160 байт.
 
 struct Params {
-  resolution : vec2f,   // [0..1]   ширина и высота кадра в пикселях
-  mouse      : vec2f,   // [2..3]   курсор в пикселях кадра
-  ball       : vec3f,   // [4..6]   x, y, радиус мяча — приходит из игровой логики
-  time       : f32,     // [7]      игровое время, секунды
-  hueShift   : f32,     // [8]      сдвиг палитры, 0..1
-  texMix     : f32,     // [9]      сколько подмешивать текстуру
-  wave       : f32,     // [10]     медленная волна, -1..1
-  frame      : f32,     // [11]     номер кадра
-  extra      : vec4f,   // [12..15] скорость мяча x/y, аспект, «энергия» 0..1
+  resolution : vec2f,
+  fov        : f32,
+  time       : f32,
+  camPos     : vec4f,
+  camForward : vec4f,
+  camRight   : vec4f,
+  camUp      : vec4f,
+  sunDir     : vec4f,
+  sunColor   : vec4f,
+  skyAmbient : vec4f,
+  counts     : vec4u,
+  extra      : vec4f,
 };

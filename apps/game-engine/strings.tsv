@@ -1,36 +1,57 @@
 key	en	ru
 game-engine.title	Game engine — Mini Apps	Игровой движок — Мини-приложения
 game-engine.name	Game engine	Игровой движок
-game-engine.frameNote	texture from CPU · values from CPU · game logic on CPU	текстура с процессора · значения с процессора · игровая логика на CPU
+game-engine.frameNote	analytic ray tracing on GPU · camera and scene on CPU	аналитическая трассировка лучей на GPU · камера и сцена на CPU
 game-engine.fps	fps	fps
 game-engine.frame	frame	кадр
 game-engine.res	resolution	разрешение
 game-engine.upload	cpu → gpu	загрузка CPU → GPU
-game-engine.params	Values from CPU	Значения с процессора
-game-engine.paramsNote	sliders write into the uniform buffer the shader reads	слайдеры пишут в uniform-буфер, шейдер их читает
-game-engine.check	Shader launch check	Проверка запуска шейдеров
-game-engine.checkNote	WGSL compile, frame drawn, compute smoke test	компиляция WGSL, отрисовка кадра, дымовой compute-тест
-game-engine.run	Run check	Прогнать тест
-game-engine.checking	Checking…	Проверяю…
+game-engine.prims	{0} prim · {1} B	{0} прим. · {1} Б
+game-engine.scene	Scene	Сцена
+game-engine.sceneNote	a scene brings its own objects, environment and camera	сцена приносит свои объекты, окружение и камеру
+game-engine.sceneDemo	test bench	стенд
+game-engine.sceneDemoNote	pedestal, steps, obelisks and orbiting spheres over a grid floor	пьедестал, ступени, обелиски и сферы на орбитах над землёй-сеткой
+game-engine.sceneBench	sphere cube 16×16×16	куб сфер 16×16×16
+game-engine.sceneBenchNote	spheres appear one by one in a 16×16×16 cube — a load and stability test	сферы появляются по одной в кубе 16×16×16 — проверка нагрузки и стабильности
+game-engine.benchRate	spheres per second	сфер в секунду
+game-engine.benchFill	fill now	заполнить сразу
+game-engine.benchStatus	{0} / {1} spheres · {2}/s	{0} / {1} сфер · {2}/с
+game-engine.benchFull	the cube is full: {0} spheres	куб заполнен: {0} сфер
+game-engine.sunHeight	sun height	высота солнца
+game-engine.speed	animation speed	скорость анимации
+game-engine.exposure	brightness	яркость
+game-engine.stars	stars	звёзды
+game-engine.grid	floor grid	сетка пола
+game-engine.gfx	Render settings	Настройки рендера
+game-engine.gfxNote	shared by all scenes: the pixel budget of the canvas and the price of light	общие для всех сцен: бюджет пикселей кадра и цена света
+game-engine.scale	render scale	масштаб рендера
+game-engine.autoScale	auto scale	авто-масштаб
+game-engine.shadows	shadows	тени
+game-engine.debug	debug overlay	отладка поверх кадра
+game-engine.perf	Performance	Производительность
+game-engine.perfNote	frame time graph · GPU time from timestamp queries · load switches	график времени кадра · время GPU из timestamp-запросов · переключатели нагрузки
+game-engine.pfFps	fps	fps
+game-engine.pfAvg	avg, ms	среднее, мс
+game-engine.pfBest	best	лучший
+game-engine.pfP95	95%	95%
+game-engine.pfWorst	worst	худший
+game-engine.pfCpu	cpu	cpu
+game-engine.pfGpu	gpu	gpu
+game-engine.pfGpuOn	time of the render pass, measured on the GPU	время прохода, измеренное на GPU
+game-engine.pfGpuOff	this browser does not let the page measure GPU time	этот браузер не даёт странице измерить время GPU
+game-engine.pfScale	scale	масштаб
+game-engine.camera	Camera	Камера
+game-engine.cameraNote	the same in every scene: drag orbits, wheel zooms, keys move the target	одинаково во всех сценах: мышь облетает, колесо приближает, клавиши двигают цель
+game-engine.hintDragKey	drag	мышь
+game-engine.hintDrag	orbit around the target	вращает камеру вокруг цели
+game-engine.hintWheelKey	wheel	колесо
+game-engine.hintWheel	zoom in and out	приближает и отдаляет
+game-engine.hintKeysKey	WASD / arrows	WASD / стрелки
+game-engine.hintKeys	move the target, arrows rotate the view	двигают цель, стрелки поворачивают взгляд
 game-engine.pause	Pause	Пауза
 game-engine.resume	Resume	Продолжить
 game-engine.reset	Reset	Сброс
-game-engine.note	Only the launch is checked at this stage; comparing values CPU ↔ GPU is the next step.	На этом этапе проверяется только запуск; сверка значений CPU ↔ GPU — следующим шагом.
-game-engine.empty	the check has not run yet	тест ещё не запускался
-game-engine.speed	logic speed	скорость логики
-game-engine.mouse	mouse pull	притяжение к мыши
-game-engine.texmix	texture mix	микс текстуры
-game-engine.hue	palette shift	сдвиг палитры
-game-engine.renderShader	render shader	рендер-шейдер
-game-engine.computeShader	compute shader	compute-шейдер
-game-engine.frameInfo	frame {0}×{1}, pixel #{2}, shades in row: {3}	кадр {0}×{1}, пиксель #{2}, оттенков в строке: {3}
-game-engine.frameEmpty	frame {0}×{1} — the shader drew nothing	кадр {0}×{1} — шейдер ничего не нарисовал
-game-engine.gpuError	GPU error: {0}	ошибка GPU: {0}
-game-engine.computeFail	the compute shader did not start	compute-шейдер не запустился
-game-engine.markerOk	marker 0x{0}, workgroup 1×1×1 done	метка 0x{0}, workgroup 1×1×1 выполнился
-game-engine.markerBad	no marker, first word 0x{0}	метки нет: первое слово 0x{0}
-game-engine.sumOk	shaders launched, the frame is drawn	шейдеры запустились, кадр рисуется
-game-engine.sumBad	a shader did not launch — see the rows above	шейдер не запустился — разбор в строках выше
+game-engine.note	Sun height sweeps day into night: shadows, sky and stars follow it.	Высота солнца ведёт день в ночь: за ней идут тени, небо и звёзды.
 game-engine.gpuAsking	asking for an adapter…	запрос адаптера…
 game-engine.failTitle	the engine did not start	движок не запустился
 game-engine.fail1	Open the app by its web address: from a local disk a browser does not let it read the shader files.	Открывайте приложение по веб-адресу: с локального диска браузер не даёт читать файлы шейдеров.

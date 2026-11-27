@@ -22,18 +22,20 @@
 
   <div class="frame">
     <div class="frame-top">
-      <span class="file">shaders/render.wgsl</span>
+      <span class="file">shaders/scene.wgsl</span>
+      <span class="badge" id="frame-scene">—</span>
       <span class="badge" id="frame-size">—</span>
     </div>
 
     <div class="viewport" id="viewport">
       <canvas id="gpu-canvas"></canvas>
+      <div class="dbg" id="dbg-overlay" hidden></div>
       <i class="corner tl"></i><i class="corner tr"></i>
       <i class="corner bl"></i><i class="corner br"></i>
       <div class="overlay" id="overlay" hidden></div>
     </div>
 
-    <div class="frame-bottom" data-i18n="game-engine.frameNote">texture from CPU · values from CPU · game logic on CPU</div>
+    <div class="frame-bottom" data-i18n="game-engine.frameNote">analytic ray tracing on GPU · camera and scene on CPU</div>
   </div>
 
   <p class="sub" id="gpu-info">GPU: —</p>
@@ -46,33 +48,63 @@
   </div>
 
   <section class="panel">
-    <h2 data-i18n="game-engine.params">Values from CPU</h2>
-    <p class="sub" data-i18n="game-engine.paramsNote">sliders write into the uniform buffer the shader reads</p>
-    <div id="controls" class="controls"></div>
+    <h2 data-i18n="game-engine.scene">Scene</h2>
+    <p class="sub" data-i18n="game-engine.sceneNote">a scene brings its own objects, environment and camera</p>
+    <div id="scene-bar" class="ctrl ctrl-row"></div>
+    <p class="sub" id="scene-note"></p>
+    <div id="scene-controls" class="controls"></div>
+    <div id="scene-actions" class="row-actions"></div>
+    <p class="note" id="scene-status"></p>
 
-    <h2 data-i18n="game-engine.check">Shader launch check</h2>
-    <p class="sub" data-i18n="game-engine.checkNote">WGSL compile, frame drawn, compute smoke test</p>
-    <div id="tests" class="tests"></div>
+    <h2 data-i18n="game-engine.gfx">Render settings</h2>
+    <p class="sub" data-i18n="game-engine.gfxNote">shared by all scenes: the pixel budget of the canvas and the price of light</p>
+    <div id="gfx-opts" class="perf-opts"></div>
+
+    <h2 data-i18n="game-engine.perf">Performance</h2>
+    <p class="sub" data-i18n="game-engine.perfNote">frame time graph · GPU time from timestamp queries · load switches</p>
+    <canvas id="perf-graph" class="perf-graph" width="640" height="96"></canvas>
+    <div class="perf-stats">
+      <span><b id="p-fps">—</b><i data-i18n="game-engine.pfFps">fps</i></span>
+      <span><b id="p-avg">—</b><i data-i18n="game-engine.pfAvg">avg, ms</i></span>
+      <span><b id="p-best">—</b><i data-i18n="game-engine.pfBest">best</i></span>
+      <span><b id="p-p95">—</b><i data-i18n="game-engine.pfP95">95%</i></span>
+      <span><b id="p-worst">—</b><i data-i18n="game-engine.pfWorst">worst</i></span>
+      <span><b id="p-cpu">—</b><i data-i18n="game-engine.pfCpu">cpu</i></span>
+      <span><b id="p-gpu">—</b><i data-i18n="game-engine.pfGpu">gpu</i></span>
+      <span><b id="p-scale">—</b><i data-i18n="game-engine.pfScale">scale</i></span>
+    </div>
+
+    <h2 data-i18n="game-engine.camera">Camera</h2>
+    <p class="sub" data-i18n="game-engine.cameraNote">the same in every scene: drag orbits, wheel zooms, keys move the target</p>
+    <ul class="hints">
+      <li><b data-i18n="game-engine.hintDragKey">drag</b><span data-i18n="game-engine.hintDrag">orbit around the target</span></li>
+      <li><b data-i18n="game-engine.hintWheelKey">wheel</b><span data-i18n="game-engine.hintWheel">zoom in and out</span></li>
+      <li><b data-i18n="game-engine.hintKeysKey">WASD / arrows</b><span data-i18n="game-engine.hintKeys">move the target, arrows rotate the view</span></li>
+    </ul>
 
     <div class="row-actions">
-      <button id="btn-test" type="button" data-i18n="game-engine.run">Run check</button>
       <button id="btn-pause" class="ghost" type="button" data-i18n="game-engine.pause">Pause</button>
       <button id="btn-reset" class="ghost" type="button" data-i18n="game-engine.reset">Reset</button>
     </div>
-    <p class="note" data-i18n="game-engine.note">Only the launch is checked at this stage; comparing values CPU ↔ GPU is the next step.</p>
+    <p class="note" data-i18n="game-engine.note">Sun height sweeps day into night: shadows, sky and stars follow it.</p>
   </section>
 
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/shaders.js"></script>
-<script src="js/gpu.js"></script>
-<script src="js/texture.js"></script>
-<script src="js/renderer.js"></script>
-<script src="js/game.js"></script>
-<script src="js/input.js"></script>
-<script src="js/hud.js"></script>
-<script src="js/selftest.js"></script>
+<script src="js/core/i18n.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/gfx/shaders.js"></script>
+<script src="js/gfx/gpu.js"></script>
+<script src="js/gfx/renderer.js"></script>
+<script src="js/camera/camera.js"></script>
+<script src="js/input/input.js"></script>
+<script src="js/perf/perf.js"></script>
+<script src="js/scene/registry.js"></script>
+<script src="js/scene/pack.js"></script>
+<script src="js/scene/demo.js"></script>
+<script src="js/scene/bench.js"></script>
+<script src="js/ui/hud.js"></script>
+<script src="js/ui/panels.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

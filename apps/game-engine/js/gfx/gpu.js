@@ -14,7 +14,16 @@
         'No GPU adapter: WebGPU may be disabled or there is no suitable driver.'));
     }
 
-    var device = await adapter.requestDevice();
+    // timestamp-query нужна инструментам производительности: без неё время GPU не измерить
+    var features = [];
+    var want = ['timestamp-query', 'chromium-experimental-timestamp-query-inside-passes'];
+    if (adapter.features) {
+      for (var i = 0; i < want.length; i++) {
+        if (adapter.features.has(want[i])) features.push(want[i]);
+      }
+    }
+
+    var device = await adapter.requestDevice(features.length ? { requiredFeatures: features } : {});
     if (device.addEventListener) {
       device.addEventListener('uncapturederror', function (e) {
         console.error('[webgpu] uncaught:', e.error);
@@ -29,11 +38,11 @@
       device: device,
       format: format,
       alphaMode: 'opaque',
-      // COPY_SRC нужен проверке: она читает готовый кадр обратно на CPU
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
+      usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
 
-    return { adapter: adapter, device: device, context: context, format: format, info: adapter.info || {} };
+    return { adapter: adapter, device: device, context: context, format: format, info: adapter.info || {},
+      hasTiming: features.length > 0 };
   };
 
   // компиляция шейдера с человеческой диагностикой вместо тишины
