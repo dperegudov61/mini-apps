@@ -210,13 +210,16 @@
     hud.onPause(function (value) { paused = value; });
     hud.onReset(resetScene);
 
-    // «Сбросить кэш» вместо Ctrl+F5: чистим Cache Storage и Service Worker, затем
-    // открываем ту же страницу по новому адресу — браузер не возьмёт старые файлы
-    // из своего кэша. Настройки сцены (localStorage) при этом не трогаются.
+    // «Сбросить кэш» вместо Ctrl+F5: чистим Cache Storage и Service Worker,
+    // каждый файл страницы (скрипты, шейдеры, стили) заново тянем мимо кэша —
+    // так обновляется и HTTP-кэш самого браузера, иначе новая app.js
+    // могла остаться старой до 10 минут, а затем открываем страницу по новому адресу.
+    // Настройки сцены (localStorage) при этом не трогаются.
     var btnCache = document.getElementById('btn-cache');
     if (btnCache) {
       btnCache.addEventListener('click', function () {
         btnCache.disabled = true;
+        var stamp = Date.now();
         var jobs = [];
         if (window.caches && caches.keys) {
           jobs.push(caches.keys().then(function (keys) {
@@ -228,8 +231,17 @@
             return Promise.all(list.map(function (reg) { return reg.unregister(); }));
           }));
         }
+        // все ресурсы этой страницы: тот же адрес, но с обходом кэша и записью в него
+        var urls = [];
+        try {
+          urls = performance.getEntriesByType('resource').map(function (e) { return e.name; })
+            .filter(function (u) { return u.indexOf(location.origin) === 0; });
+        } catch (e) {}
+        for (var i = 0; i < urls.length; i++) {
+          jobs.push(fetch(urls[i], { cache: 'reload' }).catch(function () {}));
+        }
         Promise.all(jobs).catch(function () {}).then(function () {
-          location.replace(location.pathname + '?v=' + Date.now());
+          location.replace(location.pathname + '?v=' + stamp);
         });
       });
     }
