@@ -25,6 +25,7 @@
       pGpu: $('p-gpu'),
       pScale: $('p-scale'),
       pPrims: $('p-prims'),
+      pOcc: $('p-occ'),
       pMpx: $('p-mpx'),
       btnPause: $('btn-pause'),
       btnReset: $('btn-reset')
@@ -95,6 +96,14 @@
     // сколько тел в сцене и во что обходится мегапиксель кадра — одной меркой на любое устройство;
     // при упоре в частоту экрана (60 Гц) время кадра ничего не говорит о цене — показываем «—»
     if (e.pPrims) e.pPrims.textContent = String(s.prims || 0);
+    if (e.pOcc) {
+      e.pOcc.textContent = s.occ > 0 ? String(Math.round(s.occ)) : '—';
+      var occCell = e.pOcc.parentNode;
+      if (occCell) {
+        occCell.title = GE.t('game-engine.pfOccHint',
+          'share of time the GPU core is busy: 100% — the queue never empties, 50% — the core is half idle');
+      }
+    }
     if (e.pMpx) {
       var capped = s.avg > 0 && s.avg < 17.5;
       e.pMpx.textContent = capped ? '—' : (s.msPerMpx || 0).toFixed(1);

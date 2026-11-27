@@ -29,6 +29,8 @@ game-engine.scale	render scale	масштаб рендера
 game-engine.autoScale	auto scale	авто-масштаб
 game-engine.shadows	shadows	тени
 game-engine.debug	debug overlay	отладка поверх кадра
+game-engine.coreLimit	core limit	нагрузка на ядро
+game-engine.coreLimitHint	share of frame time the shader may use the GPU core; the rest stays idle for the page and the system	доля времени кадра, которую шейдеру можно занимать видеоядро; остальное — простой для страницы и системы
 game-engine.perf	Performance	Производительность
 game-engine.perfNote	frame time graph · GPU time from timestamp queries · load switches	график времени кадра · время GPU из timestamp-запросов · переключатели нагрузки
 game-engine.pfFps	fps	fps
@@ -44,6 +46,8 @@ game-engine.pfScale	scale	масштаб
 game-engine.pfPrims	prims	примитивов
 game-engine.pfMpx	ms per Mpx	мс на Мпикс
 game-engine.pfMpxHint	frame time per megapixel: grows with the number of bodies and the render scale	время кадра на мегапиксель: растёт от числа тел и от масштаба рендера
+game-engine.pfOcc	core busy, %	занятость ядра, %
+game-engine.pfOccHint	share of time the GPU core is busy: 100% — the queue never empties, 50% — the core is half idle	доля времени, когда видеоядро занято: 100% — очередь не пустеет, 50% — половину времени ядро свободно
 game-engine.camera	Camera	Камера
 game-engine.cameraNote	the same in every scene: drag orbits, wheel zooms, keys move the target	одинаково во всех сценах: мышь облетает, колесо приближает, клавиши двигают цель
 game-engine.hintDragKey	drag	мышь

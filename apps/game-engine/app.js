@@ -72,11 +72,12 @@
   function debugText(counts) {
     var s = perf.stats;
     var gpu = (s.gpu === null || s.gpu === undefined) ? '—' : s.gpu.toFixed(2);
+    var occ = s.occ > 0 ? Math.round(s.occ) + '%' : '—';
     return 'fps ' + s.fps.toFixed(0) + ' · ' + s.avg.toFixed(1) + ' ms\n' +
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
       renderer.canvas.width + '×' + renderer.canvas.height + ' · ' +
       renderer.pixelScale.toFixed(2) + '× · ' + counts.total + ' prim\n' +
-      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu;
+      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ;
   }
 
   // ---- открыть сцену: свой набор объектов, своё окружение, своё положение камеры ----
@@ -157,6 +158,7 @@
 
     var last = performance.now();
     var adaptAcc = 0;
+    var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс
 
     // авто-масштаб: держим кадр около 60 Гц, меняя разрешение рендера.
     // Шаг множителем, а не прибавлением: от 2× до 0.01× иначе не добраться.
@@ -204,7 +206,7 @@
       // а вот медленные кадры слабого устройства берём: иначе на 4× график пустой.
       if (document.visibilityState !== 'hidden') {
         perf.push(rawMs, performance.now() - t0, renderer.gpuMs(),
-          counts.total, renderer.canvas.width * renderer.canvas.height);
+          counts.total, renderer.canvas.width * renderer.canvas.height, lastBusy);
       }
       perf.draw();
       hud.setPerf(perf.stats, renderer.pixelScale);
@@ -227,9 +229,23 @@
     // кадр выполнится, — очередь не растёт, а камера, ползунки и меню остаются живыми.
     var busy = false;   // кадр подан, но ещё не выполнен
 
+    // Простой после кадра: настройка «core limit» разрешает шейдеру занимать ядро
+    // не всё время. Внутри кадра работа не дробится — прервать шейдер нельзя, но между
+    // кадрами железо отдыхает, и вместе с ним дышат композитор, меню и вся система.
+    // 50% — кадр и простой равны, занятость ядра падает вдвое.
+    function idleFor(busyMs, duty) {
+      var d = (typeof duty === 'number' && duty > 0 && duty < 1) ? duty : 1;
+      if (d >= 1) return 0;
+      return busyMs * (1 / d - 1);
+    }
+
+    function nextFrame() {
+      requestAnimationFrame(frame);
+    }
+
     // ошибка в кадре не должна молча убивать цикл: показываем её и останавливаемся
     function frame(now) {
-      if (busy) { requestAnimationFrame(frame); return; }
+      if (busy) { nextFrame(); return; }
 
       try {
         step(now);
@@ -242,19 +258,23 @@
       // ждём именно этот кадр: onSubmittedWorkDone срабатывает, когда очередь опустела
       var queue = gpu.device.queue;
       if (typeof queue.onSubmittedWorkDone !== 'function') {
-        requestAnimationFrame(frame);
+        nextFrame();
         return;
       }
 
       busy = true;
-      queue.onSubmittedWorkDone().then(function () {
+      var sentAt = performance.now();
+
+      function done() {
         busy = false;
-        requestAnimationFrame(frame);
-      }, function () {
-        // устройство потеряно или ждать нечего — цикл всё равно продолжаем
-        busy = false;
-        requestAnimationFrame(frame);
-      });
+        lastBusy = performance.now() - sentAt;   // столько кадр занимал видеоядро
+        var wait = idleFor(lastBusy, gfx.duty);
+        if (wait > 1) setTimeout(nextFrame, wait);   // простой: ядро свободно для других
+        else nextFrame();
+      }
+
+      // устройство потеряно или ждать нечего — цикл всё равно продолжаем
+      queue.onSubmittedWorkDone().then(done, done);
     }
 
     // вернулись на вкладку — начинаем мерить заново

@@ -5,7 +5,9 @@
   'use strict';
 
   // настройки рендера: одни на все сцены (debug — отладочная строка поверх кадра)
-  var GFX_DEFAULTS = { scale: 1, auto: 0, shadows: 1, debug: 1 };
+  // duty — какую долю времени видеоядру разрешено занимать: остальное — простой,
+  // чтобы композитор браузера, системные окна и меню успевали рисовать
+  var GFX_DEFAULTS = { scale: 1, auto: 0, shadows: 1, debug: 1, duty: 1 };
 
   // масштаб кадра: 0.01 — предел, на котором видно только счётчик работы;
   // 3× и 4× — не для красоты: так проверяют движок за старое слабое устройство
@@ -31,6 +33,25 @@
     { key: 'debug', label: 'game-engine.debug', fb: 'debug overlay' }
   ];
 
+  // нагрузка на ядро: внутри кадра шейдер всё равно занимает ядро целиком
+  // (прервать его нельзя) — ограничиваем долю времени, а не саму работу
+  var DUTIES = [
+    { value: 1, text: '100%' },
+    { value: 0.75, text: '75%' },
+    { value: 0.5, text: '50%' },
+    { value: 0.25, text: '25%' }
+  ];
+
+  // сохранённое значение может быть чужим — приводим к ближайшему из списка
+  function nearestDuty(v) {
+    var best = 1, dist = Infinity;
+    for (var i = 0; i < DUTIES.length; i++) {
+      var d = Math.abs(DUTIES[i].value - v);
+      if (d < dist) { dist = d; best = DUTIES[i].value; }
+    }
+    return best;
+  }
+
   function Panels() {
     var $ = function (id) { return document.getElementById(id); };
 
@@ -47,6 +68,7 @@
     this.toggles = [];
     this.sceneSelect = null;
     this.gfxSelect = null;
+    this.dutySelect = null;
     this.gfxBoxes = [];
   }
 
@@ -94,6 +116,37 @@
     row.appendChild(sel);
     host.appendChild(row);
 
+    // нагрузка на ядро: сколько времени кадра шейдеру разрешено занимать видеоядро.
+    // Внутри кадра работа не дробится (прервать шейдер нельзя), но между кадрами
+    // остаётся простой — и на 4× слабая машина перестаёт вставать целиком
+    var rowDuty = document.createElement('div');
+    rowDuty.className = 'ctrl ctrl-row';
+
+    var nameDuty = document.createElement('span');
+    nameDuty.setAttribute('data-i18n', 'game-engine.coreLimit');
+    nameDuty.textContent = GE.t('game-engine.coreLimit', 'core limit');
+
+    var dutySel = document.createElement('select');
+    DUTIES.forEach(function (d) {
+      var opt = document.createElement('option');
+      opt.value = String(d.value);
+      opt.textContent = d.text;
+      dutySel.appendChild(opt);
+    });
+    dutySel.value = String(nearestDuty(gfx.duty));
+    dutySel.title = GE.t('game-engine.coreLimitHint',
+      'share of frame time the shader may use the GPU core; the rest is left idle for the page and the system');
+    dutySel.addEventListener('change', function () {
+      gfx.duty = parseFloat(dutySel.value);
+      self.saveGfx(gfx);
+      if (onChange) onChange(gfx);
+    });
+    this.dutySelect = dutySel;
+
+    rowDuty.appendChild(nameDuty);
+    rowDuty.appendChild(dutySel);
+    host.appendChild(rowDuty);
+
     // переключатели цены кадра
     var tools = document.createElement('div');
     tools.className = 'toggles';
@@ -127,6 +180,7 @@
 
   Panels.prototype.syncGfx = function (gfx) {
     if (this.gfxSelect) this.gfxSelect.value = String(gfx.scale);
+    if (this.dutySelect) this.dutySelect.value = String(nearestDuty(gfx.duty));
     this.gfxBoxes.forEach(function (t) { t.box.checked = gfx[t.key] > 0.5; });
   };
 
