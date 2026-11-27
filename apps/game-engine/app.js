@@ -176,8 +176,12 @@
     function step(now) {
       var rawMs = now - last;
       last = now;
-      var rawSec = Math.min(Math.max(rawMs / 1000, 0), 1);   // честный интервал: fps не врёт на тяжёлых кадрах
-      var dt = Math.min(rawSec, 0.05);                        // шаг сцены ограничен: без прыжков после паузы
+      // честный интервал: fps не врёт на тяжёлых кадрах
+      var rawSec = Math.min(Math.max(rawMs / 1000, 0), 2);
+      // шаг сцены — реальное время кадра, без обрезки: если кадр рисуется 140 мс,
+      // сцена за эти 140 мс и сдвинется, иначе движение замедляется вместе с fps.
+      // Потолок в 2 с — только страховка от возврата на вкладку и от сна машины
+      var dt = rawSec;
       var t0 = performance.now();
 
       hud.tick(rawSec);
@@ -216,8 +220,17 @@
       adapt(rawSec);
     }
 
+    // ---- подача кадра: один кадр в полёте на видеокарте ----
+    // Подавать кадр каждый тик экрана нельзя: при кадре в 140 мс цикл на 60 Гц набирал
+    // бы минуты отложенной работы в очереди, видеоядро занято на 100% и вместе с ним
+    // встаёт весь компьютер и интерфейс телефона. Поэтому процессор ждёт, пока поданный
+    // кадр выполнится, — очередь не растёт, а камера, ползунки и меню остаются живыми.
+    var busy = false;   // кадр подан, но ещё не выполнен
+
     // ошибка в кадре не должна молча убивать цикл: показываем её и останавливаемся
     function frame(now) {
+      if (busy) { requestAnimationFrame(frame); return; }
+
       try {
         step(now);
       } catch (err) {
@@ -225,7 +238,23 @@
         hud.fail(err);
         return;
       }
-      requestAnimationFrame(frame);
+
+      // ждём именно этот кадр: onSubmittedWorkDone срабатывает, когда очередь опустела
+      var queue = gpu.device.queue;
+      if (typeof queue.onSubmittedWorkDone !== 'function') {
+        requestAnimationFrame(frame);
+        return;
+      }
+
+      busy = true;
+      queue.onSubmittedWorkDone().then(function () {
+        busy = false;
+        requestAnimationFrame(frame);
+      }, function () {
+        // устройство потеряно или ждать нечего — цикл всё равно продолжаем
+        busy = false;
+        requestAnimationFrame(frame);
+      });
     }
 
     // вернулись на вкладку — начинаем мерить заново
