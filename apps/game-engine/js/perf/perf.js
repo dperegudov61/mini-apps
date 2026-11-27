@@ -18,6 +18,7 @@
     this.pixels = new Float32Array(CAP);     // пикселей в кадре
     this.head = 0;
     this.count = 0;
+    this.skip = 3;   // сколько первых кадров не считать (компиляция шейдера и т.п.)
 
     this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
       prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0 };
@@ -31,6 +32,13 @@
   // gpuMs — измеренное время прохода (null, если измерение недоступно),
   // prims — тел в сцене, pixels — пикселей в кадре (для «мс на мегапиксель»)
   Perf.prototype.push = function (intervalMs, cpuMs, gpuMs, prims, pixels) {
+    // первые кадры после сброса — компиляция шейдера и первый показ кадра; они
+    // в сотни раз длиннее обычных и испортили бы среднее и p95
+    if (this.skip > 0) {
+      this.skip -= 1;
+      return;
+    }
+
     // меньше 4 мс — это не кадр, а совпавшие метки времени: такой замер пропускаем,
     // иначе «лучший кадр» и среднее врут
     if (!(intervalMs >= 4)) return;
@@ -51,6 +59,7 @@
   Perf.prototype.reset = function () {
     this.head = 0;
     this.count = 0;
+    this.skip = 3;   // после сброса пропускаем первый медленный кадр компиляции
     this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
       prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0 };
   };
