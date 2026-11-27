@@ -7,7 +7,7 @@
   var PARAMS_FLOATS = 48;   // 48 × f32 = 192 Б, см. shaders/params.wgsl
   var PARAMS_TIME = 3;      // индекс игрового времени в значениях кадра (см. pack.js)
   var PRIM_FLOATS = 12;     // примитив = 3 vec4f = 48 Б, см. shaders/primitives.wgsl
-  var MAX_PRIMS = 17576;    // потолок буфера примитивов: 824 КБ, куб сфер 26³ (17576)
+  var MAX_PRIMS = 32768;    // потолок буфера примитивов: 1.5 МБ, куб сфер 32³ (32768)
 
   function Renderer(gpu, canvas) {
     this.gpu = gpu;

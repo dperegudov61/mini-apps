@@ -1,15 +1,19 @@
 /* bench.js — сцена-бенчмарк для проверки движка и сбора данных о стабильности.
-   Куб 26×26×26 сфер; ползунок «объектов» задаёт ТОЧНОЕ число тел (0…17576), поэтому
-   зависимость «сколько тел → сколько мс» видна прямо на графике: подвинули ползунок —
-   линия времени кадра встала на новую высоту. Ползунок «сфер в секунду» (> 0) заставляет
-   сцену расти самой — старый способ смотреть, как движок держит наплыв. */
+   Куб сфер: ползунок «сфер по ребру» задаёт размер куба (4…32), то есть сразу и
+   нагрузку: 4³ = 64 тела, 32³ = 32768. Куб всегда занимает один и тот же объём
+   (16 м), поэтому на экране меняется густота, а не кадрирование — сравнивать честно.
+   Ползунок «сфер в секунду» (> 0) заставляет сцену расти самой от нуля до полного
+   куба — старый способ смотреть, как движок держит наплыв.
+   Сцена стартует ПУСТОЙ: число сфер в кадре не запоминается, чтобы после перезагрузки
+   бенчмарк начинался с нуля, а не с прошлой тяжёлой сцены. */
 (function (GE) {
   'use strict';
 
-  var N = 26;                 // сфер по ребру куба
-  var TOTAL = N * N * N;      // 17576
-  var SPACING = 1;            // шаг сетки, метры
-  var RADIUS = 0.30;          // радиус сферы, метры
+  var EDGE_MIN = 4;           // сфер по ребру: нижняя граница ползунка (4³ = 64)
+  var EDGE_MAX = 32;          // верхняя (32³ = 32768) — она же потолок буфера примитивов
+  var EDGE_DEF = 8;           // с чего начинается ползунок (8³ = 512)
+  var SIZE = 16;              // объём куба, метры: один и тот же при любом числе тел
+  var RADIUS = 0.30;          // радиус сферы в долях шага сетки
 
   // простая палитра без таблиц: t 0…1 → цвет, плавный переход по кругу
   function palette(t) {
@@ -20,20 +24,21 @@
     ];
   }
 
-  // порядок появления: слой за слоем снизу вверх, чтобы рост был виден глазом
-  function buildPlan() {
+  // куб edge³: снизу вверх, слой за слоем — так виден порядок появления
+  function buildPlan(edge) {
     var out = [];
-    var half = (N - 1) / 2;
-    for (var j = 0; j < N; j++) {
-      for (var i = 0; i < N; i++) {
-        for (var k = 0; k < N; k++) {
+    var step = SIZE / edge;                 // шаг сетки подстраивается под объём куба
+    var half = (edge - 1) / 2;
+    for (var j = 0; j < edge; j++) {
+      for (var i = 0; i < edge; i++) {
+        for (var k = 0; k < edge; k++) {
           out.push({
             kind: 'sphere',
-            x: (i - half) * SPACING,
-            y: 0.5 + j * SPACING,
-            z: (k - half) * SPACING,
-            r: RADIUS,
-            color: palette(0.10 + (j / N) * 0.60 + ((i + k) / (2 * N)) * 0.28)
+            x: (i - half) * step,
+            y: 0.5 + j * step,
+            z: (k - half) * step,
+            r: RADIUS * step,
+            color: palette(0.10 + (j / edge) * 0.60 + ((i + k) / (2 * edge)) * 0.28)
           });
         }
       }
@@ -42,8 +47,9 @@
   }
 
   function BenchScene() {
+    this.edge = EDGE_DEF;
+    this.plan = buildPlan(this.edge);
     this.objects = [];
-    this.plan = buildPlan();
     this.spawned = 0;
     this.acc = 0;
     this.time = 0;
@@ -52,17 +58,31 @@
     this.reset();
   }
 
+  BenchScene.prototype.total = function () {
+    return this.edge * this.edge * this.edge;
+  };
+
   BenchScene.prototype.reset = function () {
     this.objects.length = 0;
     this.spawned = 0;
     this.acc = 0;
     this.time = 0;
-    this.countSet = -1;      // «применить ползунок при следующем обновлении»
+    // первый кадр только принимает ползунок как есть: сцена начинается пустой
+    this.fresh = true;
+    this.edgeSet = -1;
   };
 
-  // точное число тел: сразу столько, сколько просят (0…TOTAL)
+  // заново собрать куб другого размера
+  BenchScene.prototype.setEdge = function (n) {
+    var edge = Math.max(EDGE_MIN, Math.min(EDGE_MAX, Math.round(n || EDGE_DEF)));
+    if (edge === this.edge) return;
+    this.edge = edge;
+    this.plan = buildPlan(edge);
+  };
+
+  // точное число тел: сразу столько, сколько просят (0…edge³)
   BenchScene.prototype.setCount = function (n) {
-    var want = Math.max(0, Math.min(TOTAL, Math.round(n || 0)));
+    var want = Math.max(0, Math.min(this.total(), Math.round(n || 0)));
     if (this.objects.length > want) this.objects.length = want;
     while (this.objects.length < want) this.objects.push(this.plan[this.objects.length]);
     this.spawned = this.objects.length;
@@ -71,18 +91,17 @@
 
   // добавить n сфер из заготовки (готовые объекты не меняются — можно класть как есть)
   BenchScene.prototype.spawn = function (n) {
-    while (n > 0 && this.spawned < TOTAL) {
+    var total = this.total();
+    while (n > 0 && this.spawned < total) {
       this.objects.push(this.plan[this.spawned]);
       this.spawned += 1;
       n -= 1;
     }
   };
 
-  // кнопка сцены: поставить все сферы сразу, не ожидая ползунка
-  BenchScene.prototype.fillAll = function (settings) {
-    this.setCount(TOTAL);
-    this.countSet = TOTAL;
-    if (settings) settings.count = TOTAL;   // ползунок встаёт на максимум
+  // кнопка сцены: поставить весь куб сразу, не ожидая ползунка
+  BenchScene.prototype.fillAll = function () {
+    this.setCount(this.total());
   };
 
   BenchScene.prototype.update = function (dt, p) {
@@ -94,11 +113,17 @@
     this.env.grid = p.grid;
     this.sun = GE.sunFor(p.sunHeight);
 
-    // ползунок «объектов» главнее: подвинули — сразу ровно столько тел
-    if (p.count !== this.countSet) {
-      this.countSet = p.count;
-      this.setCount(p.count);
-    } else if (dt > 0 && p.rate > 0 && this.spawned < TOTAL) {
+    // ползунок «сфер по ребру»: сменили — куб сразу такого размера и полный
+    if (this.fresh) {
+      // вход в сцену: принимаем сохранённый размер, но начинаем с нуля тел
+      this.fresh = false;
+      this.setEdge(p.edge);
+      this.edgeSet = this.edge;
+    } else if (p.edge !== this.edgeSet) {
+      this.edgeSet = p.edge;
+      this.setEdge(p.edge);
+      this.setCount(this.total());
+    } else if (dt > 0 && p.rate > 0 && this.spawned < this.total()) {
       // иначе сцена растёт сама — старый способ смотреть, как движок держит наплыв
       this.acc += p.rate * dt;
       var n = Math.floor(this.acc);
@@ -110,22 +135,24 @@
   };
 
   BenchScene.prototype.status = function (p) {
-    if (this.spawned >= TOTAL) {
-      return GE.t('game-engine.benchFull', 'the cube is full: {0} spheres', [String(TOTAL)]);
+    if (this.spawned >= this.total()) {
+      return GE.t('game-engine.benchFull', 'the cube is full: {0} spheres', [String(this.spawned)]);
     }
     return GE.t('game-engine.benchStatus', '{0} / {1} spheres · {2}/s',
-      [String(this.spawned), String(TOTAL), p.rate.toFixed(0)]);
+      [String(this.spawned), String(this.total()), p.rate.toFixed(0)]);
   };
 
   GE.Scenes.define({
     id: 'bench',
     label: 'game-engine.sceneBench',
-    fb: 'sphere cube 26×26×26',
+    fb: 'sphere cube',
     note: 'game-engine.sceneBenchNote',
-    noteFb: 'the exact number of spheres in a 26×26×26 cube — a load and stability test',
-    camera: { target: [0, 13, 0], yaw: 0.9, pitch: 0.38, distance: 52 },
+    noteFb: 'a cube of spheres: the edge length sets the load — from 4³ to 32³',
+    camera: { target: [0, 8.5, 0], yaw: 0.9, pitch: 0.38, distance: 36 },
     params: [
-      GE.SceneParts.count(0, TOTAL),
+      { key: 'edge', label: 'game-engine.benchEdge', fb: 'spheres per edge',
+        min: EDGE_MIN, max: EDGE_MAX, step: 1, def: EDGE_DEF,
+        fmt: function (v) { var e = Math.round(v); return e + ' · ' + (e * e * e); } },
       GE.SceneParts.rate(0),
       GE.SceneParts.sun(42),
       GE.SceneParts.exposure(1)
@@ -136,10 +163,10 @@
     ],
     actions: [
       { key: 'fill', label: 'game-engine.benchFill', fb: 'fill now',
-        run: function (scene, settings) { scene.fillAll(settings); } }
+        run: function (scene) { scene.fillAll(); } }
     ],
     create: function () { return new BenchScene(); }
   });
 
-  GE.BENCH_TOTAL = TOTAL;
+  GE.BENCH_EDGE = { min: EDGE_MIN, max: EDGE_MAX, def: EDGE_DEF };
 })(window.GE = window.GE || {});

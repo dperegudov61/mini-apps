@@ -1,4 +1,4 @@
-key	en	ru
+﻿key	en	ru
 game-engine.title	Game engine — Mini Apps	Игровой движок — Мини-приложения
 game-engine.name	Game engine	Игровой движок
 game-engine.frameNote	analytic ray tracing on GPU · camera and scene on CPU	аналитическая трассировка лучей на GPU · камера и сцена на CPU
@@ -11,8 +11,9 @@ game-engine.scene	Scene	Сцена
 game-engine.sceneNote	a scene brings its own objects, environment and camera	сцена приносит свои объекты, окружение и камеру
 game-engine.sceneDemo	test bench	стенд
 game-engine.sceneDemoNote	pedestal, steps, obelisks and orbiting spheres over a grid floor	пьедестал, ступени, обелиски и сферы на орбитах над землёй-сеткой
-game-engine.sceneBench	sphere cube 26×26×26	куб сфер 26×26×26
-game-engine.sceneBenchNote	the exact number of spheres in a 26×26×26 cube — a load and stability test	точное число сфер в кубе 26×26×26 — проверка нагрузки и стабильности
+game-engine.sceneBench	sphere cube	куб сфер
+game-engine.sceneBenchNote	a cube of spheres: the edge length sets the load — from 4³ to 32³	куб сфер: число сфер по ребру задаёт нагрузку — от 4³ до 32³
+game-engine.benchEdge	spheres per edge	сфер по ребру
 game-engine.benchRate	spheres per second	сфер в секунду
 game-engine.benchCount	objects	объектов
 game-engine.benchFill	fill now	заполнить сразу
