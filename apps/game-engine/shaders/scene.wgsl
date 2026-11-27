@@ -299,12 +299,24 @@ fn shadeSurface(n : vec3f, albedo : vec3f, rd : vec3f, sun : vec3f,
 
 @fragment
 fn fs_main(v : VSOut) -> @location(0) vec4f {
+  // Наполнение статики: сцена рисуется в УМЕНЬШЕННУЮ текстуру, где каждый её пиксель —
+  // это одна точка полного кадра на решётке mask.x × mask.x со смещением (mask.y, mask.z).
+  // За кадр считается только своя доля пикселей — поэтому проход и стоит свою долю;
+  // два прохода дают вдвое больше точек, весь квадрат решётки — целый кадр.
+  // (Так, точками по всему кадру с discard не выйдет: драйвер выполняет шейдер
+  // для всех пикселей, откладывая discard, — проверено замером, 1/64 кадра стоила столько же.)
   let size = max(P.resolution, vec2f(1.0, 1.0));
-  let px = v.uv * size;
+  let steps = max(P.mask.x, 1.0);
+  var pix = v.uv * size;                     // обычный кадр — пиксель как есть
+  if (steps > 1.5) {
+    pix = vec2f(vec2u(v.clip.xy)) * steps + P.mask.yz + vec2f(0.5, 0.5);
+  }
+  let uv = pix / size;
+  let px = pix;
   let aspect = size.x / size.y;
 
   // пиксель → луч (как в исходной версии: базис и угол обзора приходят с процессора)
-  let ndc = vec2f(v.uv.x * 2.0 - 1.0, 1.0 - v.uv.y * 2.0);
+  let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
   let tanHalf = P.frame.x;
   let ro = P.camPos.xyz;
   let rd = normalize(P.camForward.xyz

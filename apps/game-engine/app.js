@@ -18,13 +18,19 @@
   var uiAt = 0;              // когда последний раз обновляли строку состояния и отладку
 
   // Ход кадра. dynamic — содержимое меняется: работает авто-масштаб (в движении разрешение
-  // сбрасывается, чтобы держать частоту); up — содержимое застыло и мы поднимаем разрешение
-  // по цене прошлого кадра; static — картинка в полном разрешении и кадры не рисуются вообще.
+  // сбрасывается, чтобы держать частоту); fill — содержимое застыло и полный кадр
+  // дорисовывается по частям (своя доля точек за проход); static — кадр собран целиком,
+  // рисовать больше нечего.
   var mode = 'dynamic';
   var dynScale = 1;          // рабочий масштаб движения: к нему возвращаемся из статики
   var warm = 0;              // сколько кадров после смены состояния не идёт в счёт авто-масштаба
   var lastWork = 0;          // цена последнего кадра, мс: что дороже — процессор или видеоядро
   var probeScale = 0;        // масштаб, к которому вернёмся, если проба не влезла (0 — пробы нет)
+  var fillSteps = 1;         // шаг решётки наполнения (проходов — fillSteps²)
+  var fillK = 0;             // какой проход наполнения рисуем сейчас
+  var fullCost = 0;          // во сколько обходится полный кадр, мс (замер наполнения)
+  var fillFixed = false;     // план наполнения уже поправлен по первому проходу
+  var primsPrev = 0;         // сколько тел было в прошлом кадре
 
   var SCALE_MIN = 0.01;      // предел авто-масштаба: кадр в единицы пикселей
   var SCALE_MAX = 4;         // верхний предел: 4× — проверка за старое слабое устройство
@@ -93,6 +99,7 @@
     mode = 'dynamic';
     dynScale = renderer.pixelScale;
     warm = 2;
+    fullCost = 0;   // цена полного кадра неизвестна — узнаем в ближайшей статике
     renderer.forceDraw();
   }
 
@@ -101,13 +108,16 @@
     var s = perf.stats;
     var gpu = (s.gpu === null || s.gpu === undefined) ? '—' : s.gpu.toFixed(2);
     var occ = s.occ > 0 ? Math.round(s.occ) + '%' : '—';
-    var state = mode === 'static' ? ' · idle' : (mode === 'up' ? ' · up' : '');
+    var state = mode === 'static' ? ' · idle'
+      : (mode === 'fill' ? ' · fill ' + fillK + '/' + (fillSteps * fillSteps) : '');
+    var shown = mode === 'dynamic' ? renderer.pixelScale : 1;
     return 'fps ' + s.fps.toFixed(0) + ' · ' + s.avg.toFixed(1) + ' ms\n' +
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
-      renderer.canvas.width + '×' + renderer.canvas.height + ' · ' +
-      renderer.pixelScale.toFixed(2) + '× · ' + counts.total + ' prim\n' +
+      renderer.renderW + '×' + renderer.renderH + ' · ' +
+      shown.toFixed(2) + '× · ' + counts.total + ' prim\n' +
       'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + state +
       '\nwork ' + lastWork.toFixed(1) + ' ms · auto ' + (gfx.auto > 0.5 ? 'on' : 'off') +
+      (mode !== 'dynamic' ? ' · move back to ' + dynScale.toFixed(2) + '×' : '') +
       (probeScale > 0 ? ' · probe back to ' + probeScale.toFixed(2) + '×' : '');
   }
 
@@ -130,6 +140,7 @@
     mode = 'dynamic';
     dynScale = clampScale(gfx ? gfx.scale : 1);
     warm = 2;
+    fullCost = 0;   // у новой сцены своя цена кадра
     renderer.forceDraw();
 
     panels.buildScene(def, settings, inst, null);
@@ -160,6 +171,7 @@
     mode = 'dynamic';
     dynScale = clampScale(gfx ? gfx.scale : 1);
     warm = 2;
+    fullCost = 0;
     renderer.forceDraw();
     panels.setStatus(active.inst.status ? active.inst.status(active.settings) : '');
     renderer.resize();
@@ -202,11 +214,15 @@
     var lastInt = 16.7;    // интервал прошлого нарисованного кадра, мс
     var intScale = 1;      // на каком масштабе он был измерен
 
-    // Полное разрешение для статичной картинки. При авто-масштабе это 1× (или выбранный
-    // масштаб, если он больше); при выключенном авто масштаб ручной — его не трогаем.
-    function idleScale() {
-      if (!(gfx.auto > 0.5)) return renderer.pixelScale;
-      return Math.max(1, clampScale(gfx.scale));
+    // Какой шаг решётки нужен, чтобы полный кадр собрался без зависания.
+    // Цена кадра движения измерена, полный кадр дороже по площади в 1/масштаб² раз.
+    function planFill() {
+      var s = Math.max(renderer.pixelScale, SCALE_MIN);
+      var cost = Math.max(lastBusy, lastInt) / (s * s);   // цена полного кадра, мс
+      // проход берёт 1/step² точек кадра: во сколько раз полный кадр дороже бюджета,
+      // во столько раз мельче решётка (шаг 2 — четверти, шаг 3 — девятые и т.д.)
+      var step = Math.ceil(Math.sqrt(cost / WORK_PASS));
+      return Math.min(FILL_SIDE_MAX, Math.max(1, step));
     }
 
     // Авто-масштаб решает по интервалу между кадрами — и только по нему.
@@ -224,15 +240,14 @@
     // пока не изменится нагрузка.
     var dynT = 0, dynSum = 0, dynN = 0;
     var vsyncMs = 16.7;   // период обновления экрана: меньшее из виденных значений
-    var WORK_IDLE = 120;  // мс: сколько может стоить ОДИН статичный кадр в полном качестве
-    var UP_STEP = 1.3;    // фиксированный шаг подъёма (последний — остаток до потолка)
+    var WORK_PASS = 100;     // мс: сколько может стоить один проход наполнения
+    var FILL_SIDE_MAX = 12;  // потолок шага решётки: 12·12 = 144 прохода, мельче незачем
     var probeAt = 0;      // масштаб до пробы (0 — пробы нет)
     var blocked = 0;      // на этом масштабе уже не влезало: снова не пробуем
     var blockedPrims = -1;
     var downFrom = 0;     // масштаб до последнего шага вниз
     var downAvg = 0;      // какой интервал заставил этот шаг сделать
     var downBlocked = false;   // снижение больше не помогает — вниз не идём
-    var upCoolAt = 0;     // до этого времени подъём в статике не пробуем
 
     function adapt(intervalMs, dynamic, prims) {
       if (!(gfx.auto > 0.5) || !dynamic || !(intervalMs > 0)) {
@@ -266,7 +281,7 @@
       var fast = vsyncMs * 1.03;  // кадр уложился в обновление с запасом
       // выше выбранного масштаба авто-масштаб не поднимается: ползунок — это потолок
       // качества, а не только стартовая точка
-      var ceil = idleScale();
+      var ceil = gfx.auto > 0.5 ? Math.max(1, clampScale(gfx.scale)) : renderer.pixelScale;
       var before = renderer.pixelScale;
 
       if (avg > slow) {
@@ -287,11 +302,13 @@
           } else {
             // просто тяжело: снижаем сразу настолько, насколько перегружены — цена
             // кадра растёт как площадь, поэтому √(цель/сейчас) и есть нужное отношение.
-            // Шаг не более ×0.4 за раз: иначе случайный тяжёлый кадр уронит картинку
+            // Шаг не более ×0.4 за раз: иначе случайный тяжёлый кадр уронит картинку.
+            // Но перегруз вчетверо и больше — это уже не случайность: сразу туда, где влезает
             var fit = Math.sqrt(vsyncMs / avg) * 0.9;
+            var floor = avg > vsyncMs * 4 ? 0.05 : 0.4;
             downFrom = before;
             downAvg = avg;
-            renderer.pixelScale = Math.max(SCALE_MIN, before * Math.max(fit, 0.4));
+            renderer.pixelScale = Math.max(SCALE_MIN, before * Math.max(fit, floor));
             blocked = 0;
           }
         }
@@ -309,7 +326,7 @@
         dynScale = renderer.pixelScale;
         probeScale = probeAt;
         renderer.resize();
-        warm = 2;   // кадр с новым размером полотна в счёт не идёт
+        warm = 2;   // кадр с новым размером текстуры в счёт не идёт
       }
     }
 
@@ -345,53 +362,76 @@
       if (changed) {
         if (mode !== 'dynamic') {
           // содержимое снова меняется: назад к рабочему масштабу движения — МГНОВЕННО,
-          // одним кадром и без ступеней: движение не должно догонять разрешение
+          // одним кадром и без ступеней: движение не должно догонять разрешение.
+          // Но если полный кадр не влезает в обновление экрана, начинать с него нельзя:
+          // первые кадры движения стоили бы секунды. Тогда стартуем с того масштаба,
+          // который в обновление влезает (цена кадра растёт как площадь).
+          if (fullCost > 0) {
+            var fit = Math.sqrt(vsyncMs / fullCost);
+            if (fit < dynScale) dynScale = clampScale(fit);
+          }
           mode = 'dynamic';
           warm = 2;
           perf.reset();   // замеры заново, без промежуточных и статичных кадров
           if (renderer.pixelScale !== dynScale) { renderer.pixelScale = dynScale; renderer.resize(); }
         }
-      } else if (mode === 'dynamic') {
-        // содержимое застыло: запоминаем рабочий масштаб движения и начинаем подъём
-        dynScale = renderer.pixelScale;
-        mode = performance.now() < upCoolAt ? 'static' : 'up';
-      }
 
-      // Подъём в статике идёт РАВНЫМИ ступенями (×1.3): при большой разнице разрешений
-      // (0.1× → 1×) это ровный ряд коротких шагов, а не один прыжок; последняя ступень —
-      // остаток до потолка. Ступень, которая не влезает в бюджет одного статичного кадра,
-      // не рисуется вовсе: иначе на слабом телефоне один такой кадр подвесил бы систему.
-      if (mode === 'up') {
-        var from = renderer.pixelScale;
-        var ceil = idleScale();
-        var next = Math.min(ceil, from * UP_STEP);
-        // цена кадра на текущем масштабе: замер мог быть сделан на другом
-        var nowCost = lastInt * (from * from) / (intScale * intScale || 1);
-        var cost = nowCost * (next * next) / (from * from);
-        // последняя ступень ведёт в полное качество и остаётся на экране надолго —
-        // ей разрешено дороже (раньше подъём замирал на 0.91× из-за того же бюджета)
-        var budget = next >= ceil - 0.001 ? WORK_IDLE * 1.5 : WORK_IDLE;
-        if (!(next > from * 1.001) || cost > budget) {
-          // картинка замирает там, где уже есть; с повтором подождём пять секунд —
-          // иначе при каждом стоке была бы лишняя тяжёлая работа
-          mode = 'static';
-          upCoolAt = performance.now() + 5000;
-        } else {
-          renderer.pixelScale = next;
-          renderer.resize();
-          // значения кадра пишутся до смены размера, поэтому разрешение в них осталось
-          // старым, а шейдер считает по нему аспект и размер пикселя — поправляем
-          renderer.syncSize();
-          draw = true;
-          if (!(next < ceil - 0.01)) mode = 'static';   // дошли до потолка качества
+        // Резко прибавилось тел (нажали «заполнить сразу», сдвинули куб, сменили сцену):
+        // цена кадра растёт как число тел × площадь, поэтому в прежнем разрешении
+        // один такой кадр мог бы подвесить телефон на секунды. Опускаем разрешение
+        // по числу тел (не ниже десятой доли) — авто-масштаб потом поднимет обратно.
+        if (counts.total > primsPrev * 2 && counts.total > 256) {
+          var keep = Math.max(0.1, Math.sqrt(primsPrev / counts.total));
+          var fitPrims = clampScale(renderer.pixelScale * keep);
+          if (fitPrims < dynScale) dynScale = fitPrims;
+          if (renderer.pixelScale > fitPrims) { renderer.pixelScale = fitPrims; renderer.resize(); }
         }
+      } else if (mode === 'dynamic') {
+        // содержимое застыло: запоминаем рабочий масштаб движения и начинаем наполнение
+        dynScale = renderer.pixelScale;
+        fillSteps = planFill();
+        fillK = 0;
+        fillFixed = false;
+        mode = 'fill';
+        renderer.beginFill(fillSteps);
       }
 
-      if (draw) {
+      // Наполнение статики: полотно уже полного размера, но кадр в нём собран ещё не
+      // весь. Каждый проход кладёт свою долю точек (каждую fillSteps-ю — в шахматном
+      // порядке), остальные добираются следующими проходами: два прохода — вдвое больше
+      // точек, чем в одном кадре, и так до целого кадра. Никаких видимых полос: доли
+      // не складываются в ленту, а перемешиваются по всей площади сразу.
+      if (mode === 'fill') {
+        // Цена прошлого прохода × число проходов = цена целого кадра.
+        // Первый проход — ещё и проверка плана: у малого масштаба замер упирается
+        // в частоту экрана и завышает цену, а на слабом устройстве может наоборот
+        // оказаться тяжёлым. Не сошлось — пересчитываем решётку и начинаем заново.
+        if (fillK > 0 && lastBusy > 0) {
+          var full = lastBusy * fillSteps * fillSteps;
+          if (fillK === 1 && !fillFixed) {
+            fillFixed = true;   // одна поправка на одно застывание
+            var want = Math.min(FILL_SIDE_MAX,
+              Math.max(1, Math.ceil(Math.sqrt(full / WORK_PASS))));
+            if (want !== fillSteps) {
+              fillSteps = want;
+              fillK = 0;
+              renderer.beginFill(fillSteps);
+            }
+          }
+          fullCost = full;
+        }
+        // значения и примитивы не меняются — их уже послали в кадре застывания,
+        // а решётку прохода рендерер пишет сам: лишние 1.5 МБ на проход ни к чему
+        renderer.renderFill(fillSteps, fillK);
+        fillK += 1;
+        draw = true;
+        if (fillK >= fillSteps * fillSteps) mode = 'static';   // кадр собран целиком
+      } else if (draw) {
         renderer.uploadAll();
         renderer.render();
-        frames += 1;
       }
+
+      if (draw) frames += 1;
 
       // статистика: интервал между кадрами, занятость процессора, время GPU.
       // Не рисовали — пишем нулевую занятость ядра, чтобы это было видно в панели.
@@ -400,7 +440,7 @@
       if (draw) { lastInt = rawMs; intScale = renderer.pixelScale; }
       if (document.visibilityState !== 'hidden') {
         perf.push(rawMs, cpuMs, draw ? renderer.gpuMs() : null,
-          counts.total, renderer.canvas.width * renderer.canvas.height,
+          counts.total, renderer.renderW * renderer.renderH,
           draw ? lastBusy : 0, draw ? 1 : 0);
       }
       perf.draw();
@@ -409,13 +449,14 @@
       var nowT = performance.now();
       if (nowT - uiAt >= 200) {
         uiAt = nowT;
-        hud.setInfo(renderer.canvas.width, renderer.canvas.height, frames,
+        hud.setInfo(renderer.renderW, renderer.renderH, frames,
           counts.total, renderer.primBytes());
-        hud.setPerf(perf.stats, renderer.pixelScale);
+        hud.setPerf(perf.stats, mode === 'dynamic' ? renderer.pixelScale : 1);
         if (active.inst.status) panels.setStatus(active.inst.status(active.settings));
         hud.setDebug(gfx.debug > 0.5 ? debugText(counts) : '');
       }
 
+      primsPrev = counts.total;
       adapt(rawMs, changed, counts.total);
       return draw;
     }
