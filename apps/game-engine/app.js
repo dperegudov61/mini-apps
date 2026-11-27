@@ -17,6 +17,13 @@
   var frames = 0;
   var uiAt = 0;              // когда последний раз обновляли строку состояния и отладку
 
+  // Ход кадра. dynamic — содержимое меняется: работает авто-масштаб (в движении разрешение
+  // сбрасывается, чтобы держать частоту); up — содержимое застыло и мы поднимаем разрешение
+  // ступенями; static — картинка в полном разрешении и кадры не рисуются вообще.
+  var mode = 'dynamic';
+  var dynScale = 1;          // рабочий масштаб движения: к нему возвращаемся из статики
+  var upSteps = [];          // очередь промежуточных масштабов при подъёме к полному кадру
+
   var SCALE_MIN = 0.01;      // предел авто-масштаба: кадр в единицы пикселей
   var SCALE_MAX = 4;         // верхний предел: 4× — проверка за старое слабое устройство
 
@@ -66,6 +73,13 @@
     renderer.pixelScale = clampScale(gfx.scale);
     renderer.resize();
     perf.reset();
+
+    // любая смена настроек — снова работаем как обычно и обязательно перерисовываем:
+    // размер кадра мог измениться, а разрешение в сверку содержимого не входит
+    mode = 'dynamic';
+    dynScale = renderer.pixelScale;
+    upSteps = [];
+    renderer.forceDraw();
   }
 
   // отладочная строка поверх кадра: коротко и латиницей, чтобы не мешать переводу
@@ -73,12 +87,12 @@
     var s = perf.stats;
     var gpu = (s.gpu === null || s.gpu === undefined) ? '—' : s.gpu.toFixed(2);
     var occ = s.occ > 0 ? Math.round(s.occ) + '%' : '—';
-    var idle = s.idle > 50 ? ' · idle' : '';
+    var state = mode === 'static' ? ' · idle' : (mode === 'up' ? ' · up' : '');
     return 'fps ' + s.fps.toFixed(0) + ' · ' + s.avg.toFixed(1) + ' ms\n' +
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
       renderer.canvas.width + '×' + renderer.canvas.height + ' · ' +
       renderer.pixelScale.toFixed(2) + '× · ' + counts.total + ' prim\n' +
-      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + idle;
+      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + state;
   }
 
   // ---- открыть сцену: свой набор объектов, своё окружение, своё положение камеры ----
@@ -95,6 +109,12 @@
     perf.reset();
     frames = 0;
     uiAt = 0;
+
+    // новая сцена — снова динамика с выбранного масштаба
+    mode = 'dynamic';
+    dynScale = clampScale(gfx ? gfx.scale : 1);
+    upSteps = [];
+    renderer.forceDraw();
 
     panels.buildScene(def, settings, inst, null);
     renderer.resize();
@@ -121,6 +141,10 @@
     perf.reset();
     frames = 0;
     uiAt = 0;
+    mode = 'dynamic';
+    dynScale = clampScale(gfx ? gfx.scale : 1);
+    upSteps = [];
+    renderer.forceDraw();
     panels.setStatus(active.inst.status ? active.inst.status(active.settings) : '');
     renderer.resize();
   }
@@ -158,27 +182,57 @@
     hud.onReset(resetScene);
 
     var last = performance.now();
-    var adaptAcc = 0;
     var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс
-    var idleRun = 0;       // сколько кадров подряд не рисовали (в простое)
 
-    // авто-масштаб: держим кадр около 60 Гц, меняя разрешение рендера.
-    // Шаг множителем, а не прибавлением: от 2× до 0.01× иначе не добраться.
-    // В простое не трогаем ничего: там кадров нет, и по «быстрому» интервалу
-    // он бы улетел на 4×, а вернувшись к движению мы получили бы тяжёлый кадр.
-    function adapt(dtSec, drew) {
-      if (!(gfx.auto > 0.5)) return;
-      if (!drew) { adaptAcc = 0; return; }
+    // Полное разрешение для статичной картинки. При авто-масштабе это 1× (или выбранный
+    // масштаб, если он больше); при выключенном авто масштаб ручной — его не трогаем.
+    function idleScale() {
+      if (!(gfx.auto > 0.5)) return renderer.pixelScale;
+      return Math.max(1, clampScale(gfx.scale));
+    }
 
-      adaptAcc += dtSec;
-      if (adaptAcc < 0.5) return;
-      adaptAcc = 0;
+    // Ступени от рабочего масштаба к полному: между динамикой и статикой проходит
+    // пара промежуточных кадров с промежуточным разрешением.
+    function planUpscale(from, to) {
+      var out = [];
+      if (!(from < to - 0.001)) return out;   // уже полное или даже больше — поднимать некуда
 
-      var avg = perf.stats.avg;
+      var s = from;
+      for (var i = 0; i < 4 && s < to - 0.001; i++) {
+        s = Math.min(to, s * 1.7);
+        out.push(s);
+      }
+      if (out[out.length - 1] < to - 0.001) out.push(to);
+      return out;
+    }
+
+    // Авто-масштаб работает только в динамике и считает по своим кадрам, а не по окну
+    // инструментов: в окно попадают статичные и промежуточные кадры, и по ним решение
+    // было бы неверным. Цель — держать кадр около 60 Гц, меняя разрешение множителем
+    // (шаг прибавлением не дойдёт от 4× до 0.01×).
+    var dynT = 0, dynSum = 0, dynN = 0;
+
+    function adapt(frameMs, dynamic) {
+      if (!(gfx.auto > 0.5) || !dynamic) {
+        dynT = 0; dynSum = 0; dynN = 0;
+        return;
+      }
+
+      dynT += frameMs / 1000;
+      dynSum += frameMs;
+      dynN += 1;
+      if (dynT < 0.5) return;
+
+      var avg = dynSum / dynN;
+      dynT = 0; dynSum = 0; dynN = 0;
+
       var before = renderer.pixelScale;
       if (avg > 21 && before > SCALE_MIN) renderer.pixelScale = Math.max(SCALE_MIN, before * 0.7);
       else if (avg < 13.5 && before < SCALE_MAX) renderer.pixelScale = Math.min(SCALE_MAX, before * 1.2);
-      if (renderer.pixelScale !== before) renderer.resize();
+      if (renderer.pixelScale !== before) {
+        dynScale = renderer.pixelScale;
+        renderer.resize();
+      }
     }
 
     function step(now) {
@@ -194,8 +248,9 @@
 
       hud.tick(rawSec);
 
-      var resized = renderer.resize();
-      if (resized) renderer.forceDraw();   // после смены размера текстур старое содержимое не годится
+      // размер полотна мог измениться (окно, поворот экрана): подгоняем буфер кадра,
+      // и если он действительно поменялся — старую картинку надо перерисовать
+      if (renderer.resize()) renderer.forceDraw();
 
       // камера живая всегда; на паузе сцена замирает, но ползунки продолжают работать
       camera.update(dt);
@@ -203,35 +258,51 @@
 
       var counts = GE.writeFrame(renderer, active.inst, camera, gfx);
 
-      // Сверка с прошлым кадром на процессоре: если на GPU ушли бы те же числа, рисунок
-      // не изменится — кадр не подаём вовсе. В простое картинка стоит, ядро не работает.
-      var drew = renderer.frameChanged();
+      // ---- что рисуем в этом кадре -----------------------------------------------
+      // Сверка содержимого на процессоре: объекты, камера, солнце, окружение.
+      // Разрешение и игровое время в неё не входят — они меняются сами по себе.
+      var changed = renderer.contentChanged();
+      var draw = changed;
 
-      if (drew) {
-        // вернулись из простоя — меряем заново: в окне остались быстрые «пустые» кадры,
-        // и авто-масштаб счёл бы, что всé дёшево
-        if (idleRun > 20) perf.reset();
-        idleRun = 0;
+      if (changed) {
+        if (mode !== 'dynamic') {
+          // содержимое снова меняется: назад к рабочему масштабу движения
+          mode = 'dynamic';
+          upSteps = [];
+          perf.reset();   // замеры заново, без промежуточных и статичных кадров
+          if (renderer.pixelScale !== dynScale) { renderer.pixelScale = dynScale; renderer.resize(); }
+        }
+      } else if (mode === 'dynamic') {
+        // содержимое застыло: запоминаем рабочий масштаб и поднимаем разрешение
+        // ступенями — пара промежуточных кадров, затем полный кадр и тишина
+        dynScale = renderer.pixelScale;
+        upSteps = planUpscale(dynScale, idleScale());
+        mode = upSteps.length ? 'up' : 'static';
+      }
 
+      if (mode === 'up') {
+        renderer.pixelScale = upSteps.shift();
+        renderer.resize();
+        draw = true;
+        if (!upSteps.length) mode = 'static';
+      }
+
+      if (draw) {
         renderer.uploadAll();
         renderer.render();
         frames += 1;
-      } else {
-        idleRun += 1;
       }
 
       // статистика: интервал между кадрами, занятость процессора, время GPU.
-      // Кадр после возврата на вкладку — сотни миллисекунд — в статистику не берём;
-      // а вот медленные кадры слабого устройства берём: иначе на 4× график пустой.
-      // Пустой кадр (ничего не изменилось) идёт с нулевой занятостью ядра.
+      // Не рисовали — пишем нулевую занятость ядра, чтобы это было видно в панели.
       if (document.visibilityState !== 'hidden') {
-        perf.push(rawMs, performance.now() - t0, drew ? renderer.gpuMs() : null,
+        perf.push(rawMs, performance.now() - t0, draw ? renderer.gpuMs() : null,
           counts.total, renderer.canvas.width * renderer.canvas.height,
-          drew ? lastBusy : 0, drew ? 1 : 0);
+          draw ? lastBusy : 0, draw ? 1 : 0);
       }
       perf.draw();
 
-      // строки состояния и цифры обновляем пять раз в секунду: в простое это вся работа
+      // строки состояния и цифры обновляем пять раз в секунду: в статике это вся работа
       var nowT = performance.now();
       if (nowT - uiAt >= 200) {
         uiAt = nowT;
@@ -242,8 +313,8 @@
         hud.setDebug(gfx.debug > 0.5 ? debugText(counts) : '');
       }
 
-      adapt(rawSec, drew);
-      return drew;
+      adapt(rawMs, changed);
+      return draw;
     }
 
     // ---- подача кадра: один кадр в полёте на видеокарте ----
