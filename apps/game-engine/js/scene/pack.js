@@ -17,7 +17,7 @@
   var PRIM_FLOATS = GE.PRIM_FLOATS || 32;
 
   var KIND = {
-    sphere: 1, box: 2, torus: 3, cone: 4, cylinder: 5, plane: 6, rect: 7, triangle: 8
+    sphere: 1, box: 2, torus: 3, cone: 4, cylinder: 5, plane: 6, rect: 7, triangle: 8, mesh: 9
   };
 
   // коды операций — должны совпадать с shaders/primitives.wgsl
@@ -60,7 +60,7 @@
   GE.SUN_AZIMUTH = SUN_AZIMUTH;
 
   // ---- один примитив в буфер (32 float, см. shaders/primitives.wgsl) ----
-  function writePrim(d, o, obj) {
+  function writePrim(d, o, obj, renderer) {
     d[o] = KIND[obj.kind] || 0;
     d[o + 1] = obj.invert ? 1 : 0;
     d[o + 2] = obj.doubleSided ? 1 : 0;
@@ -107,6 +107,22 @@
       d[o + 4] = v0[0]; d[o + 5] = v0[1]; d[o + 6] = v0[2];
       d[o + 8] = v1[0]; d[o + 9] = v1[1]; d[o + 10] = v1[2];
       d[o + 12] = v2[0]; d[o + 13] = v2[1]; d[o + 14] = v2[2];
+    } else if (k === 'mesh') {
+      // модель уже лежит своей копией в буфере сеток; здесь только смещение и поворот
+      var res = obj.mesh;
+      var slot = renderer ? renderer.meshSlot(res) : -1;
+      if (!res || slot < 0) { d[o] = 0; return; }   // не поместилась — просто не рисуем
+      d[o + 4] = slot + res.triBase;
+      d[o + 5] = res.triCount;
+      d[o + 6] = slot + res.nodeBase;
+      d[o + 7] = res.nodeCount;
+      d[o + 8] = res.bboxMin[0]; d[o + 9] = res.bboxMin[1]; d[o + 10] = res.bboxMin[2];
+      d[o + 11] = obj.scale || 1;
+      d[o + 12] = res.bboxMax[0]; d[o + 13] = res.bboxMax[1]; d[o + 14] = res.bboxMax[2];
+      var bx = obj.X || [1, 0, 0], by = obj.Y || [0, 1, 0], bz = obj.Z || [0, 0, 1];
+      d[o + 16] = bx[0]; d[o + 17] = bx[1]; d[o + 18] = bx[2]; d[o + 19] = obj.x || 0;
+      d[o + 20] = by[0]; d[o + 21] = by[1]; d[o + 22] = by[2]; d[o + 23] = obj.y || 0;
+      d[o + 24] = bz[0]; d[o + 25] = bz[1]; d[o + 26] = bz[2]; d[o + 27] = obj.z || 0;
     }
   }
 
@@ -161,7 +177,7 @@
     // примитивы
     var primCount = 0;
     for (i = 0; i < objects.length && (i + 1) * PRIM_FLOATS <= limit; i++) {
-      writePrim(data, i * PRIM_FLOATS, objects[i]);
+      writePrim(data, i * PRIM_FLOATS, objects[i], renderer);
       primCount = i + 1;
     }
 

@@ -3,7 +3,7 @@
 // треугольник) как отдельные листы.
 //
 // Раскладка буфера (заполняет js/scene/pack.js → GE.packScene): один примитив = 8 vec4 = 32 float = 128 Б.
-//   m : vec4f   x = вид (1 сфера, 2 куб, 3 тор, 4 конус, 5 цилиндр, 6 плоскость, 7 прямоугольник, 8 треугольник),
+//   m : vec4f   x = вид (1 сфера, 2 куб, 3 тор, 4 конус, 5 цилиндр, 6 плоскость, 7 прямоугольник, 8 треугольник, 9 сетка),
 //               y = вывернуть (0/1), z = двусторонний (0/1), w = matId (задел под карту нормалей, 0 — нет)
 //   a..f : vec4f — геометрия вида (см. ниже)
 //   g : vec4f   rgb = цвет, a = зарезервировано
@@ -17,6 +17,12 @@
 //   плоскость:a = (точка.xyz, 0), b = (нормаль.xyz, 0), e.x = радиус (0 — бесконечная)
 //   прямоуг.: a = (центр.xyz, 0), b = (базис U.xyz, 0), c = (базис V.xyz, 0), d = (полуW, полуH, 0, 0)
 //   треугол.: a = (v0.xyz, 0), b = (v1.xyz, 0), c = (v2.xyz, 0)
+//   сетка:    a = (смещение треугольников, число, смещение узлов BVH, число узлов) — в float'ах буфера meshBuf
+//             b = (bmin.xyz модели, масштаб), c = (bmax.xyz, 0),
+//             d/e/f = (оси поворота X/Y/Z, сдвиг по этой оси в w); см. js/scene/mesh.js
+//             Поворот и сдвиг применяются к лучу, а не к вершинам: модель можно крутить
+//             без пересылки буфера. Масштаб равномерный.
+//             Сетка — тоже лист, как треугольник: булевы операции над её объёмом не считаются.
 //
 // Плоскости конуса/цилиндра заданы уравнением dot(n, x) + d <= 0 (внутри тела).
 // Правило видимости: грань видна, только если нормаль смотрит на луч (dot(n, rd) < 0);
@@ -24,6 +30,8 @@
 
 @group(0) @binding(1) var<storage, read> prims : array<Prim>;
 @group(0) @binding(2) var<storage, read> csg : array<u32>;
+// треугольные сетки: узлы BVH и треугольники подряд (js/scene/mesh.js)
+@group(0) @binding(3) var<storage, read> meshBuf : array<vec4f>;
 
 struct Prim {
   m : vec4f,
@@ -50,6 +58,7 @@ const K_CYL    : f32 = 5.0;
 const K_PLANE  : f32 = 6.0;
 const K_RECT   : f32 = 7.0;
 const K_TRI    : f32 = 8.0;
+const K_MESH   : f32 = 9.0;
 
 // коды операций CSG-программы (в буфере csg, два u32 на инструкцию: код, операнд)
 const OP_LEAF : u32 = 0u;
@@ -597,6 +606,144 @@ fn triInterval(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
 }
 
 // ------------------------------------------------------------
+// ТРЕУГОЛЬНЫЕ СЕТКИ (полигональные модели)
+// Раскладку буфера задаёт js/scene/mesh.js: сначала узлы BVH (8 float на узел),
+// затем треугольники (24 float), всё — в пространстве модели.
+// Узел: A = (bmin.xyz, left или -(начало треугольников + 1)), B = (bmax.xyz, right или число).
+// Луч переводится в пространство модели здесь же: мировые вершины не пересчитываются,
+// поэтому поворот и сдвиг модели ничего не стоят, а расстояние t вдоль луча сохраняется.
+// ------------------------------------------------------------
+
+struct TriHit {
+  t : f32,
+  u : f32,
+  v : f32,
+};
+
+// пересечение луча с коробкой: x — вход, y — выход; y < x — промах
+fn boxEnter(ro : vec3f, rd : vec3f, bmin : vec3f, bmax : vec3f) -> vec2f {
+  let safe = select(vec3f(1e-8), rd, abs(rd) > vec3f(1e-8));
+  let ta = (bmin - ro) / safe;
+  let tb = (bmax - ro) / safe;
+  let lo = min(ta, tb);
+  let hi = max(ta, tb);
+  return vec2f(max(max(lo.x, lo.y), lo.z), min(min(hi.x, hi.y), hi.z));
+}
+
+// Мёller–Trumbore: расстояние и барицентрические координаты попадания
+fn triCoords(ro : vec3f, rd : vec3f, v0 : vec3f, e1 : vec3f, e2 : vec3f, tmax : f32) -> TriHit {
+  let miss = TriHit(1e9, 0.0, 0.0);
+  let h = cross(rd, e2);
+  let a = dot(e1, h);
+  if (abs(a) < 1e-12) { return miss; }
+  let f = 1.0 / a;
+  let s = ro - v0;
+  let u = f * dot(s, h);
+  if (u < 0.0 || u > 1.0) { return miss; }
+  let q = cross(s, e1);
+  let v = f * dot(rd, q);
+  if (v < 0.0 || u + v > 1.0) { return miss; }
+  let t = f * dot(e2, q);
+  if (t < 1e-5 || t > tmax) { return miss; }
+  return TriHit(t, u, v);
+}
+
+// обход дерева: ближайшее попадание (для цвета) или любое (для тени — выход сразу)
+fn meshLeaf(pid : u32, roW : vec3f, rdW : vec3f, base : i32, shadow : bool) -> i32 {
+  let p = prims[pid];
+  let scl = max(p.b.w, 1e-6);
+  let rel = roW - vec3f(p.d.w, p.e.w, p.f.w);
+  // мир -> модель: оси поворота лежат в d/e/f как столбцы
+  let ro = vec3f(dot(p.d.xyz, rel), dot(p.e.xyz, rel), dot(p.f.xyz, rel)) / scl;
+  let rd = vec3f(dot(p.d.xyz, rdW), dot(p.e.xyz, rdW), dot(p.f.xyz, rdW)) / scl;
+
+  let rootBox = boxEnter(ro, rd, p.b.xyz, p.c.xyz);
+  if (rootBox.y < max(rootBox.x, 0.0)) { return 0; }
+
+  // смещения в примитиве — в float'ах, а meshBuf индексируется vec4 (4 float)
+  let nodeBase = i32(p.a.z) / 4;
+  let triBase = i32(p.a.x) / 4;
+
+  var bestT = T_MISS;
+  var bestU = 0.0;
+  var bestV = 0.0;
+  var bestTri = -1;
+  var stack : array<i32, 32>;
+  stack[0] = 0;
+  var sp = 1;
+
+  loop {
+    if (sp == 0) { break; }
+    sp = sp - 1;
+    let ni = stack[sp];
+    let na = meshBuf[u32(nodeBase + ni * 2)];
+    let nb = meshBuf[u32(nodeBase + ni * 2 + 1)];
+
+    if (na.w < 0.0) {
+      // лист: треугольники идут подряд, начало — в na.w
+      let start = i32(-na.w - 1.0);
+      let cnt = i32(nb.w);
+      var k = 0;
+      loop {
+        if (k >= cnt) { break; }
+        let o = u32(triBase + (start + k) * 6);
+        let v0 = meshBuf[o].xyz;
+        let e1 = meshBuf[o + 1u].xyz;
+        let e2 = meshBuf[o + 2u].xyz;
+        let h = triCoords(ro, rd, v0, e1, e2, bestT);
+        if (h.t < bestT) { bestT = h.t; bestU = h.u; bestV = h.v; bestTri = start + k; }
+        k = k + 1;
+      }
+    } else {
+      // ветвь: дальняя половина в стек первой, поэтому ближняя проверяется следующей
+      let left = i32(na.w);
+      let right = i32(nb.w);
+      let lb = boxEnter(ro, rd,
+        meshBuf[u32(nodeBase + left * 2)].xyz, meshBuf[u32(nodeBase + left * 2 + 1)].xyz);
+      let rb = boxEnter(ro, rd,
+        meshBuf[u32(nodeBase + right * 2)].xyz, meshBuf[u32(nodeBase + right * 2 + 1)].xyz);
+      let okL = lb.y >= max(lb.x, 0.0) && lb.x < bestT;
+      let okR = rb.y >= max(rb.x, 0.0) && rb.x < bestT;
+      if (okL && okR) {
+        if (sp < 30) {
+          if (lb.x <= rb.x) {
+            stack[sp] = right; sp = sp + 1;
+            stack[sp] = left; sp = sp + 1;
+          } else {
+            stack[sp] = left; sp = sp + 1;
+            stack[sp] = right; sp = sp + 1;
+          }
+        }
+      } else if (okL) {
+        if (sp < 31) { stack[sp] = left; sp = sp + 1; }
+      } else if (okR) {
+        if (sp < 31) { stack[sp] = right; sp = sp + 1; }
+      }
+    }
+
+    // тени хватает одного попадания
+    if (shadow && bestTri >= 0) { break; }
+  }
+
+  if (bestTri < 0) { return 0; }
+
+  // нормаль по нормалям вершин треугольника (гладкое затенение)
+  let o = u32(triBase + bestTri * 6);
+  let w0 = 1.0 - bestU - bestV;
+  var nl = meshBuf[o + 3u].xyz * w0 + meshBuf[o + 4u].xyz * bestU + meshBuf[o + 5u].xyz * bestV;
+  if (dot(nl, nl) < 1e-12) { nl = cross(meshBuf[o + 1u].xyz, meshBuf[o + 2u].xyz); }
+  nl = normalize(nl);
+
+  var nw = normalize(p.d.xyz * nl.x + p.e.xyz * nl.y + p.f.xyz * nl.z);
+  if (p.m.y > 0.5) { nw = -nw; }
+  // открытая модель: нормаль развёрнута к лучу, иначе свет пропадает на изнанке
+  if (p.m.z > 0.5 && dot(nw, rdW) > 0.0) { nw = -nw; }
+
+  setIv(base, 0, bestT, bestT, nw, nw, vec4f(p.g.rgb, p.m.z));
+  return 1;
+}
+
+// ------------------------------------------------------------
 // CSG-ИНТЕРПРЕТАТОР
 // Программа — постфиксная запись дерева: LEAF i (положить лист), бинарные операции
 // (снять два, положить результат), ROOT (снять результат и внести в ответ).
@@ -607,7 +754,7 @@ fn csgReset() {
   for (var i = 0; i < STACK_MAX; i = i + 1) { s_cnt[i] = 0; }
 }
 
-fn csgPushLeaf(pid : u32, ro : vec3f, rd : vec3f) {
+fn csgPushLeaf(pid : u32, ro : vec3f, rd : vec3f, shadow : bool) {
   let base = s_top * INT_MAX;
   let kind = u32(prims[pid].m.x);
   var n : i32 = 0;
@@ -618,6 +765,7 @@ fn csgPushLeaf(pid : u32, ro : vec3f, rd : vec3f) {
   else if (kind == 6u) { n = planeInterval(pid, ro, rd, base); }
   else if (kind == 7u) { n = rectInterval(pid, ro, rd, base); }
   else if (kind == 8u) { n = triInterval(pid, ro, rd, base); }
+  else if (kind == 9u) { n = meshLeaf(pid, ro, rd, base, shadow); }
   s_cnt[s_top] = n;
   s_top = s_top + 1;
 }
@@ -823,7 +971,7 @@ fn traceScene(ro : vec3f, rd : vec3f) -> Hit {
     let op = csg[ip * 2u];
     let arg = csg[ip * 2u + 1u];
     if (op == OP_LEAF) {
-      csgPushLeaf(arg, ro, rd);
+      csgPushLeaf(arg, ro, rd, false);
     } else if (op == OP_ROOT) {
       best = csgFoldHit(best, ro, rd);
     } else {
@@ -842,7 +990,7 @@ fn shadowScene(ro : vec3f, rd : vec3f) -> f32 {
     let op = csg[ip * 2u];
     let arg = csg[ip * 2u + 1u];
     if (op == OP_LEAF) {
-      csgPushLeaf(arg, o, rd);
+      csgPushLeaf(arg, o, rd, true);
     } else if (op == OP_ROOT) {
       if (csgBlocked(rd)) { return 0.0; }
     } else {

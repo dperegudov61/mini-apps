@@ -147,6 +147,32 @@
       return this._opts({
         kind: 'triangle', v0: v0, v1: v1, v2: v2, color: color
       }, opts);
+    },
+
+    // полигональная модель (js/scene/mesh.js): ресурс сетки, центр и поворот.
+    // Модель уже вписана в свой размер (opts.size при сборке), scale — добавка к нему.
+    // opts.rot = [rx, ry, rz] в радианах или готовый базис {X, Y, Z}.
+    mesh: function (res, pos, color, opts) {
+      var p = opts || {};
+      var b;
+      if (p.rot && p.rot.X) b = p.rot;
+      else {
+        var r = p.rot || [0, 0, 0];
+        b = this.eulerBasis(r[0], r[1], r[2]);
+      }
+      // открытая модель: по умолчанию двусторонняя, иначе видна только снаружи
+      var q = {
+        invert: p.invert, doubleSided: p.doubleSided != null ? p.doubleSided : 1,
+        matId: p.matId, id: p.id, ops: p.ops
+      };
+      var o = this._opts({
+        kind: 'mesh', mesh: res,
+        x: pos[0], y: pos[1], z: pos[2],
+        scale: p.scale || 1,
+        X: b.X, Y: b.Y, Z: b.Z,
+        color: color || (res && res.color) || [0.78, 0.78, 0.80]
+      }, q);
+      return o;
     }
   };
 })(window.GE = window.GE || {});

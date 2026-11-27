@@ -2,14 +2,14 @@
   "id": "game-engine",
   "name": "Game engine",
   "nameRu": "Игровой движок",
-  "description": "WebGPU engine skeleton: analytic ray tracing, switchable CPU scenes and a sphere-cube benchmark with frame-time tools",
-  "descriptionRu": "Каркас движка на WebGPU: аналитическая трассировка лучей, переключаемые сцены на процессоре и бенчмарк из куба сфер с инструментами времени кадра",
+  "description": "WebGPU engine skeleton: analytic ray tracing, switchable CPU scenes, a sphere-cube benchmark and polygonal OBJ models with a BVH",
+  "descriptionRu": "Каркас движка на WebGPU: аналитическая трассировка лучей, переключаемые сцены на процессоре, бенчмарк из куба сфер и полигональные модели OBJ с деревом BVH",
   "created": "2026-11-26",
   "updated": "2026-11-27",
-  "version": "1.14.3",
+  "version": "1.15.0",
   "status": "draft",
   "entry": "index.html",
   "icon": "icon.png",
-  "tags": ["engine", "webgpu", "shader", "graphics", "3d", "benchmark"],
+  "tags": ["engine", "webgpu", "shader", "graphics", "3d", "benchmark", "obj", "mesh"],
   "meta": {}
 }

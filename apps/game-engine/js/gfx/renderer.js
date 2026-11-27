@@ -20,6 +20,8 @@
   var PRIM_FLOATS = 32;     // примитив = 8 vec4f = 128 Б, см. shaders/primitives.wgsl
   var MAX_PRIMS = 32768;    // потолок буфера примитивов: 4 МБ, куб сфер 32³ (32768)
   var MAX_CSG = 131072;     // потолок CSG-программы: инструкций (2 u32 на инструкцию)
+  // потолок буфера сеток (узлы BVH + треугольники): 32 МБ — это примерно 300 тыс. треугольников
+  var MESH_FLOATS_MAX = 8 * 1024 * 1024;
   var CLEAR = { r: 0.02, g: 0.03, b: 0.04, a: 1 };
 
   function Renderer(gpu, canvas) {
@@ -38,6 +40,14 @@
     this.primCount = 0;
     this.csgData = new Uint32Array(MAX_CSG * 2);
     this.csgCount = 0;
+
+    // треугольные сетки: свои данные, буфер создаётся по мере надобности
+    this.meshData = new Float32Array(0);   // float'ы всех загруженных моделей подряд
+    this.meshFloats = 0;                   // сколько из них занято
+    this.meshSlots = {};                   // uid модели -> смещение в meshData
+    this.meshVersion = 0;                  // менялось — переслать на GPU
+    this.meshUploaded = -1;
+    this.lastMeshVersion = -1;
 
     // сверка кадра с прошлым: копия того, что уже ушло на GPU. Совпало — подавать нечего
     this.lastParams = new Float32Array(PARAMS_FLOATS);
@@ -147,13 +157,22 @@
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
+    // сетки: пока пустышка на 64 байта, настоящий буфер появится с первой моделью
+    this.meshBufferBytes = 64;
+    this.meshBuffer = device.createBuffer({
+      label: 'mesh (storage)',
+      size: this.meshBufferBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+
     this.bindGroup = device.createBindGroup({
       label: 'scene bindings',
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuffer } },
         { binding: 1, resource: { buffer: this.primBuffer } },
-        { binding: 2, resource: { buffer: this.csgBuffer } }
+        { binding: 2, resource: { buffer: this.csgBuffer } },
+        { binding: 3, resource: { buffer: this.meshBuffer } }
       ]
     });
 
@@ -387,12 +406,80 @@
     this.forced = true;
   };
 
-  // Сверка содержимого кадра на процессоре — до подачи на GPU. Смотрим только на то,
-  // что меняет игрок и сцена: объекты, положение камеры, солнце, окружение.
+  // ---- треугольные сетки ---------------------------------------------------
+
+  // Пересобрать bind group: после роста буфера сеток он становится другим
+  Renderer.prototype.rebuildBindGroup = function () {
+    this.bindGroup = this.device.createBindGroup({
+      label: 'scene bindings',
+      layout: this.pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuffer } },
+        { binding: 1, resource: { buffer: this.primBuffer } },
+        { binding: 2, resource: { buffer: this.csgBuffer } },
+        { binding: 3, resource: { buffer: this.meshBuffer } }
+      ]
+    });
+  };
+
+  // буфер под модели растёт по мере надобности: пустой он никому не нужен
+  Renderer.prototype.ensureMeshBuffer = function (bytes) {
+    if (this.meshBufferBytes >= bytes) return true;
+    var cap = this.meshBufferBytes;
+    while (cap < bytes) cap *= 2;
+    var limit = MESH_FLOATS_MAX * 4;
+    var devLimit = this.device.limits && this.device.limits.maxStorageBufferBindingSize;
+    if (devLimit && devLimit < limit) limit = devLimit;
+    if (cap > limit) cap = limit;
+    if (cap < bytes) return false;              // модель не помещается в буфер
+    var buf = this.device.createBuffer({
+      label: 'mesh (storage)',
+      size: cap,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    var old = this.meshBuffer;
+    this.meshBuffer = buf;
+    this.meshBufferBytes = cap;
+    this.meshUploaded = -1;                     // новый буфер — содержимое заново
+    this.rebuildBindGroup();
+    if (old) old.destroy();
+    return true;
+  };
+
+  // Смещение модели в общем буфере сеток. Модель копируется один раз: смена сцены
+  // или поворот меняют только поля примитива, а не содержимое буфера.
+  // Возвращает -1, если места больше нет (тогда примитив не рисуется).
+  Renderer.prototype.meshSlot = function (res) {
+    if (!res || !res.data || !res.data.length) return -1;
+    var have = this.meshSlots[res.uid];
+    if (have != null) return have;
+
+    var need = this.meshFloats + res.data.length;
+    if (need > MESH_FLOATS_MAX) return -1;
+    if (this.meshData.length < need) {
+      var cap = Math.max(need, 1 << 16);
+      cap = Math.min(MESH_FLOATS_MAX, Math.ceil(cap / 65536) * 65536);
+      var next = new Float32Array(cap);
+      if (this.meshFloats > 0) next.set(this.meshData.subarray(0, this.meshFloats));
+      this.meshData = next;
+    }
+    if (!this.ensureMeshBuffer(need * 4)) return -1;
+
+    this.meshData.set(res.data, this.meshFloats);
+    var base = this.meshFloats;
+    this.meshFloats = need;
+    this.meshSlots[res.uid] = base;
+    this.meshVersion += 1;
+    return base;
+  };
+
   // Разрешение кадра (params[0..1]), игровое время (params[3]) и решётка наполнения
   // (params[48..51]) не в счёт: это меняет сам движок, а не сцена.
+  // Сверка содержимого кадра на процессоре — до подачи на GPU. Смотрим только на то,
+  // что меняет игрок и сцена: объекты, положение камеры, солнце, окружение.
   Renderer.prototype.contentChanged = function () {
-    var i, n, changed = this.forced || this.primCount !== this.lastCount;
+    var i, n, changed = this.forced || this.primCount !== this.lastCount ||
+      this.meshVersion !== this.lastMeshVersion;
 
     if (!changed) {
       for (i = 0; i < PARAMS_FLOATS; i++) {
@@ -420,6 +507,7 @@
     if (!changed) return false;
 
     this.forced = false;
+    this.lastMeshVersion = this.meshVersion;
     this.lastParams.set(this.params);
     this.lastCount = this.primCount;
     if (this.primCount > 0) this.lastPrims.set(this.primData.subarray(0, this.primCount * PRIM_FLOATS));
@@ -437,11 +525,17 @@
     if (this.csgCount > 0) {
       queue.writeBuffer(this.csgBuffer, 0, this.csgData, 0, this.csgCount * 2);
     }
+    // сетки пересылаются только когда появились или выросли — не каждый кадр
+    if (this.meshFloats > 0 && this.meshUploaded !== this.meshVersion) {
+      queue.writeBuffer(this.meshBuffer, 0, this.meshData, 0, this.meshFloats);
+      this.meshUploaded = this.meshVersion;
+    }
   };
 
-  // сколько байт буфера примитивов занято — для метрики «cpu → gpu»
+  // сколько байт ушло на GPU: примитивы, CSG-программа и сетки (те — разом, при загрузке)
   Renderer.prototype.primBytes = function () {
-    return this.primCount * PRIM_FLOATS * 4 + this.csgCount * 2 * 4;
+    return this.primCount * PRIM_FLOATS * 4 + this.csgCount * 2 * 4 +
+      (this.meshFloats > 0 ? this.meshFloats * 4 : 0);
   };
 
   // ---- проходы ------------------------------------------------------------
@@ -615,5 +709,6 @@
   GE.MAX_PRIMS = MAX_PRIMS;
   GE.MAX_CSG = MAX_CSG;
   GE.PRIM_FLOATS = PRIM_FLOATS;
+  GE.MESH_FLOATS_MAX = MESH_FLOATS_MAX;
   GE.Renderer = Renderer;
 })(window.GE = window.GE || {});

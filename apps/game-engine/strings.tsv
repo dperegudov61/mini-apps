@@ -24,6 +24,12 @@ game-engine.scenePrimsNote	every primitive and surface, plus boolean ops: a dril
 game-engine.primsTurn	box rotation	поворот куба
 game-engine.primsTilt	torus tilt	наклон тора
 game-engine.primsStatus	{0} primitives · boolean ops: subtract and union	{0} примитивов · булевы операции: вычитание и объединение
+game-engine.scenePoly	polygonal model	полигональная модель
+game-engine.scenePolyNote	a triangle mesh loaded from an OBJ file, traced through a bounding-volume tree	треугольная сетка из файла OBJ, лучи идут через дерево ограничивающих коробок
+game-engine.polyTurn	model rotation	поворот модели
+game-engine.polyStatus	{0} triangles · {1} BVH nodes · {2} KB	{0} треугольников · {1} узлов BVH · {2} КБ
+game-engine.polyLoading	loading model…	загружаю модель…
+game-engine.polyError	model failed to load: {0}	модель не загрузилась: {0}
 game-engine.sunHeight	sun height	высота солнца
 game-engine.speed	animation speed	скорость анимации
 game-engine.exposure	brightness	яркость
