@@ -279,6 +279,11 @@
     return changed;
   };
 
+  function gcd(a, b) {
+    while (b) { var t = a % b; a = b; b = t; }
+    return a;
+  }
+
   function tex(device, label, w, h, format) {
     return device.createTexture({
       label: label,
@@ -515,11 +520,18 @@
   // Наполнение статики: шаг решётки step, проход k (0…step²−1).
   // Решётка step = 2 — четыре прохода по четверти точек: после двух кадров у кадра
   // вдвое больше точек, чем у одного, после четырёх он собран целиком.
+  //
+  // Порядок проходов — не подряд, а с шагом по всей таблице смещений (fillStride):
+  // при порядке «подряд» первые проходы добивают верхние строки решётки, и картинка
+  // наполняется полосами сверху вниз. С шагом соседние проходы ложатся далеко друг
+  // от друга — точки разбрасываются по всему кадру, как на шахматной доске.
   Renderer.prototype.renderFill = function (step, k) {
     this.ensureTextures();
     var s = Math.max(1, Math.round(step || 1));
-    var ox = s > 1 ? (k % s) : 0;
-    var oy = s > 1 ? Math.floor(k / s) : 0;
+    var cells = s * s;
+    var i = s > 1 ? (k * (this.fillStride || 1)) % cells : 0;
+    var ox = s > 1 ? (i % s) : 0;
+    var oy = s > 1 ? Math.floor(i / s) : 0;
     var toA = (k % 2) === 0;
     var encoder = this.device.createCommandEncoder({ label: 'fill' });
 
@@ -544,9 +556,21 @@
     this.submit(encoder);
   };
 
-  // шаг решётки известен заранее: под него пересоздаётся маленькая текстура
+  // шаг решётки известен заранее: под него пересоздаётся маленькая текстура,
+  // и сразу выбирается порядок обхода точек решётки (шаг, взаимно простой с их числом)
   Renderer.prototype.beginFill = function (step) {
-    this.fillStep = Math.max(1, Math.round(step || 1));
+    var s = Math.max(1, Math.round(step || 1));
+    this.fillStep = s;
+
+    if (s > 1) {
+      var cells = s * s;
+      var stride = Math.max(1, Math.round(cells * 0.618));
+      while (stride < cells && gcd(stride, cells) !== 1) stride += 1;
+      this.fillStride = stride < cells ? stride : 1;
+    } else {
+      this.fillStride = 1;
+    }
+
     this.ensureTextures();
   };
 
