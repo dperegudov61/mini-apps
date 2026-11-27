@@ -1,7 +1,8 @@
 /* bench.js — сцена-бенчмарк для проверки движка и сбора данных о стабильности.
-   Куб 16×16×16 сфер появляется по одной снизу вверх; скорость появления задаёт ползунок
-   (1…100 сфер в секунду). Число примитивов растёт от 0 до 4096 — по графику времени кадра
-   видно, как движок держит нагрузку: ровная линия, ступеньки, рывки. */
+   Куб 16×16×16 сфер; ползунок «объектов» задаёт ТОЧНОЕ число тел (0…4096), поэтому
+   зависимость «сколько тел → сколько мс» видна прямо на графике: подвинули ползунок —
+   линия времени кадра встала на новую высоту. Ползунок «сфер в секунду» (> 0) заставляет
+   сцену расти самой — старый способ смотреть, как движок держит наплыв. */
 (function (GE) {
   'use strict';
 
@@ -56,6 +57,16 @@
     this.spawned = 0;
     this.acc = 0;
     this.time = 0;
+    this.countSet = -1;      // «применить ползунок при следующем обновлении»
+  };
+
+  // точное число тел: сразу столько, сколько просят (0…TOTAL)
+  BenchScene.prototype.setCount = function (n) {
+    var want = Math.max(0, Math.min(TOTAL, Math.round(n || 0)));
+    if (this.objects.length > want) this.objects.length = want;
+    while (this.objects.length < want) this.objects.push(this.plan[this.objects.length]);
+    this.spawned = this.objects.length;
+    this.acc = 0;
   };
 
   // добавить n сфер из заготовки (готовые объекты не меняются — можно класть как есть)
@@ -67,10 +78,11 @@
     }
   };
 
-  // кнопка сцены: поставить все 4096 сразу, не ожидая ползунка скорости
-  BenchScene.prototype.fillAll = function () {
-    this.spawn(TOTAL - this.spawned);
-    this.acc = 0;
+  // кнопка сцены: поставить все 4096 сразу, не ожидая ползунка
+  BenchScene.prototype.fillAll = function (settings) {
+    this.setCount(TOTAL);
+    this.countSet = TOTAL;
+    if (settings) settings.count = TOTAL;   // ползунок встаёт на максимум
   };
 
   BenchScene.prototype.update = function (dt, p) {
@@ -82,8 +94,12 @@
     this.env.grid = p.grid;
     this.sun = GE.sunFor(p.sunHeight);
 
-    // на паузе dt = 0: ни одной сферы, но солнце и ползунки продолжают работать
-    if (dt > 0 && this.spawned < TOTAL) {
+    // ползунок «объектов» главнее: подвинули — сразу ровно столько тел
+    if (p.count !== this.countSet) {
+      this.countSet = p.count;
+      this.setCount(p.count);
+    } else if (dt > 0 && p.rate > 0 && this.spawned < TOTAL) {
+      // иначе сцена растёт сама — старый способ смотреть, как движок держит наплыв
       this.acc += p.rate * dt;
       var n = Math.floor(this.acc);
       if (n > 0) {
@@ -106,10 +122,11 @@
     label: 'game-engine.sceneBench',
     fb: 'sphere cube 16×16×16',
     note: 'game-engine.sceneBenchNote',
-    noteFb: 'spheres appear one by one in a 16×16×16 cube: a load and stability test',
+    noteFb: 'the exact number of spheres in a 16×16×16 cube — a load and stability test',
     camera: { target: [0, 8, 0], yaw: 0.9, pitch: 0.38, distance: 32 },
     params: [
-      GE.SceneParts.rate(20),
+      GE.SceneParts.count(0, TOTAL),
+      GE.SceneParts.rate(0),
       GE.SceneParts.sun(42),
       GE.SceneParts.exposure(1)
     ],
@@ -119,7 +136,7 @@
     ],
     actions: [
       { key: 'fill', label: 'game-engine.benchFill', fb: 'fill now',
-        run: function (scene) { scene.fillAll(); } }
+        run: function (scene, settings) { scene.fillAll(settings); } }
     ],
     create: function () { return new BenchScene(); }
   });

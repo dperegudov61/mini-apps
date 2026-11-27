@@ -14,10 +14,13 @@
     this.interval = new Float32Array(CAP);   // интервал между кадрами, мс
     this.cpu = new Float32Array(CAP);        // сколько процессор потратил, мс
     this.gpu = new Float32Array(CAP);        // время прохода на GPU, мс (-1 = нет данных)
+    this.prims = new Float32Array(CAP);      // тел в сцене: вторая кривая графика
+    this.pixels = new Float32Array(CAP);     // пикселей в кадре
     this.head = 0;
     this.count = 0;
 
-    this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null };
+    this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
+      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0 };
 
     this._colors = null;
     this._colorsAt = 0;
@@ -25,8 +28,9 @@
   }
 
   // intervalMs — честный интервал между кадрами, cpuMs — занятость JS в кадре,
-  // gpuMs — измеренное время прохода (null, если измерение недоступно)
-  Perf.prototype.push = function (intervalMs, cpuMs, gpuMs) {
+  // gpuMs — измеренное время прохода (null, если измерение недоступно),
+  // prims — тел в сцене, pixels — пикселей в кадре (для «мс на мегапиксель»)
+  Perf.prototype.push = function (intervalMs, cpuMs, gpuMs, prims, pixels) {
     // меньше 4 мс — это не кадр, а совпавшие метки времени: такой замер пропускаем,
     // иначе «лучший кадр» и среднее врут
     if (!(intervalMs >= 4)) return;
@@ -35,6 +39,9 @@
     this.interval[i] = intervalMs;
     this.cpu[i] = cpuMs > 0 ? cpuMs : 0;
     this.gpu[i] = (typeof gpuMs === 'number' && gpuMs > 0) ? gpuMs : -1;
+    this.prims[i] = prims > 0 ? prims : 0;
+    this.pixels[i] = pixels > 0 ? pixels : 0;
+    this.lastPrims = this.prims[i];
 
     this.head = (i + 1) % CAP;
     if (this.count < CAP) this.count += 1;
@@ -44,7 +51,8 @@
   Perf.prototype.reset = function () {
     this.head = 0;
     this.count = 0;
-    this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null };
+    this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
+      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0 };
   };
 
   // первый индекс кольца (самый старый из запомненных кадров)
@@ -56,7 +64,7 @@
     var n = this.count;
     if (!n) return;
 
-    var sum = 0, cpuSum = 0, gpuSum = 0, gpuN = 0;
+    var sum = 0, cpuSum = 0, gpuSum = 0, gpuN = 0, primSum = 0, maxPrims = 0, lastPixels = 0;
     var best = 1e9, worst = 0;
     var vals = new Array(n);
 
@@ -66,14 +74,18 @@
       vals[k] = v;
       sum += v;
       cpuSum += this.cpu[i];
+      primSum += this.prims[i];
+      if (this.prims[i] > maxPrims) maxPrims = this.prims[i];
       if (v < best) best = v;
       if (v > worst) worst = v;
       if (this.gpu[i] > 0) { gpuSum += this.gpu[i]; gpuN += 1; }
+      if (this.pixels[i] > 0) lastPixels = this.pixels[i];
     }
 
     vals.sort(function (a, b) { return a - b; });
     var p95 = vals[Math.min(n - 1, Math.floor(n * 0.95))];
     var avg = sum / n;
+    var mpx = lastPixels / 1e6;
 
     this.stats = {
       fps: avg > 0 ? 1000 / avg : 0,
@@ -82,7 +94,12 @@
       worst: worst,
       p95: p95,
       cpu: cpuSum / n,
-      gpu: gpuN ? gpuSum / gpuN : null
+      gpu: gpuN ? gpuSum / gpuN : null,
+      prims: Math.max(0, this.lastPrims || 0),   // сколько тел сейчас, а не среднее за окно
+      maxPrims: maxPrims,
+      mpx: mpx,
+      // мс на мегапиксель: одна мерка для любой карты и любого масштаба
+      msPerMpx: mpx > 0 ? avg / mpx : 0
     };
   };
 
@@ -133,8 +150,9 @@
     g.fillStyle = c.bg;
     g.fillRect(0, 0, W, H);
 
-    // верх шкалы: не меньше 20 мс, иначе ровно по худшему кадру
-    var top = Math.max(20, Math.min(160, this.stats.worst * 1.15));
+    // верх шкалы: не меньше 20 мс и не меньше худшего кадра — на 4× кадр бывает
+    // в полсекунды, и без такого запаса график был бы прижат к нулю
+    var top = Math.max(20, Math.min(4000, this.stats.worst * 1.15));
     function yOf(ms) {
       return H - pad - Math.min(1, ms / top) * (H - pad * 2);
     }
@@ -154,6 +172,21 @@
     g.stroke();
     g.setLineDash([]);
 
+    // вторая кривая — число тел в сцене, по своей шкале (видно, как время кадра идёт за количеством)
+    if (this.count > 1 && this.stats.maxPrims > 0) {
+      var primTop = this.stats.maxPrims;
+      g.strokeStyle = c.dim;
+      g.lineWidth = 1 * dpr;
+      g.beginPath();
+      for (var k2 = 0; k2 < this.count; k2++) {
+        var i2 = (this.oldest() + k2) % CAP;
+        var x2 = (k2 / (CAP - 1)) * W;
+        var y2 = H - pad - (this.prims[i2] / primTop) * (H - pad * 2);
+        if (k2 === 0) g.moveTo(x2, y2); else g.lineTo(x2, y2);
+      }
+      g.stroke();
+    }
+
     if (this.count > 1) {
       g.strokeStyle = c.cyan;
       g.lineWidth = 1.5 * dpr;
@@ -172,6 +205,10 @@
     g.fillText('60', 3 * dpr, yOf(16.7) - 2 * dpr);
     g.fillText('30', 3 * dpr, yOf(33.3) - 2 * dpr);
     g.fillText(Math.round(top) + ' ms', W - 44 * dpr, 11 * dpr);
+    // справа внизу — верх второй шкалы (число тел)
+    if (this.stats.maxPrims > 0) {
+      g.fillText(this.stats.maxPrims + ' prim', W - 56 * dpr, H - 3 * dpr);
+    }
   };
 
   GE.Perf = Perf;

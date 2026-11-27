@@ -35,8 +35,15 @@
         min: 0, max: 3, step: 0.02, def: num(def, 1), fmt: FMT.times };
     },
     rate: function (def) {
+      // 0 — сцена сама не растёт: число тел задаёт ползунок «объектов» (так видно зависимость)
       return { key: 'rate', label: 'game-engine.benchRate', fb: 'spheres per second',
-        min: 1, max: 100, step: 1, def: num(def, 20), fmt: FMT.rate };
+        min: 0, max: 100, step: 1, def: num(def, 0), fmt: FMT.rate };
+    },
+    // точное число тел: ползунок даёт прямую зависимость «количество → время кадра»
+    count: function (def, max) {
+      return { key: 'count', label: 'game-engine.benchCount', fb: 'objects',
+        min: 0, max: (typeof max === 'number' ? max : 4096), step: 1, def: num(def, 0),
+        fmt: function (v) { return String(Math.round(v)); } };
     },
     stars: function (def) {
       return { key: 'stars', label: 'game-engine.stars', fb: 'stars', def: num(def, 1) };

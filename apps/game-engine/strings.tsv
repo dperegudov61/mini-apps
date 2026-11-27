@@ -12,8 +12,9 @@ game-engine.sceneNote	a scene brings its own objects, environment and camera	с�
 game-engine.sceneDemo	test bench	стенд
 game-engine.sceneDemoNote	pedestal, steps, obelisks and orbiting spheres over a grid floor	пьедестал, ступени, обелиски и сферы на орбитах над землёй-сеткой
 game-engine.sceneBench	sphere cube 16×16×16	куб сфер 16×16×16
-game-engine.sceneBenchNote	spheres appear one by one in a 16×16×16 cube — a load and stability test	сферы появляются по одной в кубе 16×16×16 — проверка нагрузки и стабильности
+game-engine.sceneBenchNote	the exact number of spheres in a 16×16×16 cube — a load and stability test	точное число сфер в кубе 16×16×16 — проверка нагрузки и стабильности
 game-engine.benchRate	spheres per second	сфер в секунду
+game-engine.benchCount	objects	объектов
 game-engine.benchFill	fill now	заполнить сразу
 game-engine.benchStatus	{0} / {1} spheres · {2}/s	{0} / {1} сфер · {2}/с
 game-engine.benchFull	the cube is full: {0} spheres	куб заполнен: {0} сфер
@@ -40,6 +41,9 @@ game-engine.pfGpu	gpu	gpu
 game-engine.pfGpuOn	time of the render pass, measured on the GPU	время прохода, измеренное на GPU
 game-engine.pfGpuOff	this browser does not let the page measure GPU time	этот браузер не даёт странице измерить время GPU
 game-engine.pfScale	scale	масштаб
+game-engine.pfPrims	prims	примитивов
+game-engine.pfMpx	ms per Mpx	мс на Мпикс
+game-engine.pfMpxHint	frame time per megapixel: grows with the number of bodies and the render scale	время кадра на мегапиксель: растёт от числа тел и от масштаба рендера
 game-engine.camera	Camera	Камера
 game-engine.cameraNote	the same in every scene: drag orbits, wheel zooms, keys move the target	одинаково во всех сценах: мышь облетает, колесо приближает, клавиши двигают цель
 game-engine.hintDragKey	drag	мышь

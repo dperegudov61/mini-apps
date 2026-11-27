@@ -7,7 +7,8 @@
   // настройки рендера: одни на все сцены (debug — отладочная строка поверх кадра)
   var GFX_DEFAULTS = { scale: 1, auto: 0, shadows: 1, debug: 1 };
 
-  // масштаб кадра: 0.01 — предел, на котором видно только счётчик работы
+  // масштаб кадра: 0.01 — предел, на котором видно только счётчик работы;
+  // 3× и 4× — не для красоты: так проверяют движок за старое слабое устройство
   var SCALES = [
     { value: 0.01, text: '0.01×' },
     { value: 0.05, text: '0.05×' },
@@ -18,7 +19,10 @@
     { value: 1, text: '1×' },
     { value: 1.25, text: '1.25×' },
     { value: 1.5, text: '1.5×' },
-    { value: 2, text: '2×' }
+    { value: 2, text: '2×' },
+    { value: 2.5, text: '2.5×' },
+    { value: 3, text: '3×' },
+    { value: 4, text: '4×' }
   ];
 
   var GFX_TOGGLES = [
@@ -264,6 +268,8 @@
         btn.textContent = GE.t(a.label, a.fb || a.key);
         btn.addEventListener('click', function () {
           if (typeof a.run === 'function') a.run(inst, settings);
+          // действие могло само передвинуть ползунки (например, «заполнить сразу»)
+          self.syncScene(def, settings);
           if (self.el.status && inst && inst.status) self.setStatus(inst.status(settings));
         });
         hostA.appendChild(btn);

@@ -163,6 +163,18 @@
     out[38] = env.stars > 0.5 ? 1 : 0;
     out[39] = env.grid > 0.5 ? 1 : 0;
 
+    // [40..47] — постоянные кадра: всё, что не зависит от пикселя, считает процессор
+    // (см. shaders/params.wgsl → frame и frame2)
+    var sunY = sun.dir[1];
+    out[40] = Math.tan(camera.fov * 0.5);                  // тот же луч, но без tan() в пикселе
+    out[41] = smoothstep(-0.25, 0.20, sunY);               // насколько день
+    out[42] = smoothstep(-0.15, 0.05, sunY);               // виден ли диск/ореол солнца
+    out[43] = 1 - smoothstep(0.0, 0.35, Math.abs(sunY));   // полоса заката у горизонта
+    out[44] = smoothstep(-0.05, 0.15, sunY);               // день для освещения поверхности
+    out[45] = sun.color[0] * sun.strength;                 // цвет солнца сразу с силой
+    out[46] = sun.color[1] * sun.strength;
+    out[47] = sun.color[2] * sun.strength;
+
     return counts;
   };
 })(window.GE = window.GE || {});

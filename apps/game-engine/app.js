@@ -18,7 +18,7 @@
   var uiAt = 0;              // когда последний раз обновляли строку состояния и отладку
 
   var SCALE_MIN = 0.01;      // предел авто-масштаба: кадр в единицы пикселей
-  var SCALE_MAX = 2;
+  var SCALE_MAX = 4;         // верхний предел: 4× — проверка за старое слабое устройство
 
   // какие старые ползунки переехали в сцену-стенд при миграции
   var LEGACY_SCENE_KEYS = ['sunHeight', 'speed', 'exposure', 'stars', 'grid'];
@@ -131,6 +131,7 @@
 
     renderer = new GE.Renderer(gpu, canvas);
     await renderer.init('./shaders/scene.wgsl');
+    renderer.watchSize();
 
     perf = new GE.Perf(document.getElementById('perf-graph'));
     camera = new GE.Camera();
@@ -194,9 +195,13 @@
       hud.setInfo(renderer.canvas.width, renderer.canvas.height, frames,
         counts.total, renderer.primBytes());
 
-      // статистика: интервал между кадрами, занятость процессора, время GPU
-      // кадры после переключения вкладки (сотни миллисекунд) в статистику не берём
-      if (rawMs < 250) perf.push(rawMs, performance.now() - t0, renderer.gpuMs());
+      // статистика: интервал между кадрами, занятость процессора, время GPU.
+      // Кадр после возврата на вкладку — сотни миллисекунд — в статистику не берём;
+      // а вот медленные кадры слабого устройства берём: иначе на 4× график пустой.
+      if (document.visibilityState !== 'hidden') {
+        perf.push(rawMs, performance.now() - t0, renderer.gpuMs(),
+          counts.total, renderer.canvas.width * renderer.canvas.height);
+      }
       perf.draw();
       hud.setPerf(perf.stats, renderer.pixelScale);
 

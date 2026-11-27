@@ -4,7 +4,7 @@
 (function (GE) {
   'use strict';
 
-  var PARAMS_FLOATS = 40;   // 40 × f32 = 160 Б, см. shaders/params.wgsl
+  var PARAMS_FLOATS = 48;   // 48 × f32 = 192 Б, см. shaders/params.wgsl
   var PRIM_FLOATS = 12;     // примитив = 3 vec4f = 48 Б, см. shaders/primitives.wgsl
   var MAX_PRIMS = 4096;     // потолок буфера примитивов: 192 КБ, хватает кубу сфер 16³
 
@@ -23,9 +23,14 @@
     this.primData = new Float32Array(MAX_PRIMS * PRIM_FLOATS);
     this.primCount = 0;
 
-    this.pixelScale = 1;      // 0.5…2 — разрешение кадра, главный рычаг отладки производительности
+    this.pixelScale = 1;      // 0.01…4 — разрешение кадра, главный рычаг отладки производительности
     this.timing = null;       // запрос времени GPU (если браузер дал timestamp-query)
     this.maxPixelWidth = 3840;
+
+    // CSS-размер канваса: читаем не каждый кадр, а по событию изменения раскладки
+    this.cssW = 0;
+    this.cssH = 0;
+    this.lastDpr = 0;
   }
 
   Renderer.prototype.init = async function (shaderUrl) {
@@ -129,13 +134,53 @@
     });
   };
 
+  // CSS-размер канваса читается не каждый кадр, а по событию изменения раскладки:
+  // getBoundingClientRect в цикле кадров — лишняя работа на каждом кадре.
+  Renderer.prototype.measure = function () {
+    var rect = this.canvas.getBoundingClientRect();
+    this.cssW = rect.width;
+    this.cssH = rect.height;
+  };
+
+  Renderer.prototype.watchSize = function () {
+    var self = this;
+    function refresh() { self.measure(); }
+    if (window.ResizeObserver) {
+      this.sizeWatcher = new ResizeObserver(refresh);
+      this.sizeWatcher.observe(this.canvas);
+    }
+    window.addEventListener('resize', refresh);
+    this.measure();
+    return this;
+  };
+
   // подгоняем размер канваса под CSS-размер (с учётом плотности пикселей и масштаба рендера)
   Renderer.prototype.resize = function () {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var rect = this.canvas.getBoundingClientRect();
+    // плотность могла поменяться (окно перенесли на другой экран) — тогда перемеряем CSS-размер
+    if (dpr !== this.lastDpr) {
+      this.lastDpr = dpr;
+      this.measure();
+    }
+
+    var cssW = this.cssW, cssH = this.cssH;
+    if (!(cssW > 0)) {
+      this.measure();
+      cssW = this.cssW;
+      cssH = this.cssH;
+    }
+
     var scale = this.pixelScale || 1;
-    var w = Math.max(1, Math.min(this.maxPixelWidth, Math.round(rect.width * dpr * scale)));
-    var h = Math.max(1, Math.round((rect.height || rect.width * 0.5625) * dpr * scale));
+    var w = Math.max(1, Math.round(cssW * dpr * scale));
+    var h = Math.max(1, Math.round((cssH || cssW * 0.5625) * dpr * scale));
+
+    // потолок по ширине: пропорции кадра при этом не ломаются (уменьшаем оба размера)
+    if (w > this.maxPixelWidth) {
+      var k = this.maxPixelWidth / w;
+      w = this.maxPixelWidth;
+      h = Math.max(1, Math.round(h * k));
+    }
+
     if (this.canvas.width === w && this.canvas.height === h) return false;
     this.canvas.width = w;
     this.canvas.height = h;

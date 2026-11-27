@@ -207,3 +207,129 @@ fn hitBox(ro : vec3f, rd : vec3f, i : u32) -> Hit {
   }
   return nearer(miss(), tmin, n, p.c.rgb, rd);
 }
+
+// ------------------------------------------------------------
+// БЫСТРЫЕ ПРОВЕРКИ ДЛЯ ТЕНИ
+// Лучу к солнцу нужен только факт «тело на пути», а не цвет и не точка попадания:
+// считать нормаль, чтобы потом её выкинуть, — половина работы впустую.
+// Условия попадания здесь те же самые, что в hitSphere / hitCone / hitBox
+// (включая отсев граней, смотрящих от луча), поэтому тени не меняются.
+// ------------------------------------------------------------
+
+fn anySphereAt(ro : vec3f, rd : vec3f, center : vec3f, radius : f32) -> bool {
+  if (radius <= 1e-4) { return false; }
+
+  let oc = ro - center;
+  let b = dot(oc, rd);
+  let c = dot(oc, oc) - radius * radius;
+  let disc = b * b - c;
+  if (disc < 0.0) { return false; }
+
+  // как в sphereHitAt: годится ближний корень, иначе (камера внутри) — дальний
+  let s = sqrt(disc);
+  return (-b - s) > 1e-3 || (-b + s) > 1e-3;
+}
+
+fn anySphere(ro : vec3f, rd : vec3f, i : u32) -> bool {
+  let p = prims[i];
+  return anySphereAt(ro, rd, p.a.xyz, p.a.w);
+}
+
+fn anyCone(ro : vec3f, rd : vec3f, i : u32) -> bool {
+  let p = prims[i];
+  let a = p.a.xyz;
+  let b = p.b.xyz;
+  let rA = p.a.w;
+  let rB = p.b.w;
+
+  let ba = b - a;
+  let baba = dot(ba, ba);
+  if (baba < 1e-8) { return anySphereAt(ro, rd, a, max(rA, rB)); }
+
+  let oa = ro - a;
+  let bard = dot(ba, rd);
+  let baoa = dot(ba, oa);
+  let rdoa = dot(rd, oa);
+  let oaoa = dot(oa, oa);
+  let rdd = dot(rd, rd);
+  let invBaba = 1.0 / baba;
+
+  let p0p0 = oaoa - baoa * baoa * invBaba;
+  let p0p1 = rdoa - baoa * bard * invBaba;
+  let p1p1 = rdd - bard * bard * invBaba;
+  let h0 = baoa * invBaba;
+  let h1 = bard * invBaba;
+
+  let slope = rB - rA;
+  let q0 = rA + slope * h0;
+  let q1 = slope * h1;
+
+  let A = p1p1 - q1 * q1;
+  let B = 2.0 * (p0p1 - q0 * q1);
+  let C = p0p0 - q0 * q0;
+
+  if (abs(A) > 1e-8) {
+    let disc = B * B - 4.0 * A * C;
+    if (disc >= 0.0) {
+      let sq = sqrt(disc);
+      let inv2A = 0.5 / A;
+      let roots = array<f32, 2>((-B - sq) * inv2A, (-B + sq) * inv2A);
+      for (var k = 0; k < 2; k = k + 1) {
+        let t = roots[k];
+        let h = h0 + h1 * t;
+        if (t > 1e-3 && h >= 0.0 && h <= 1.0) {
+          if (dot(coneNormal(ro + rd * t, a, b, rA, rB), rd) < -1e-4) { return true; }
+        }
+      }
+    }
+  } else if (abs(B) > 1e-8) {
+    let t = -C / B;
+    let h = h0 + h1 * t;
+    if (t > 1e-3 && h >= 0.0 && h <= 1.0) {
+      if (dot(coneNormal(ro + rd * t, a, b, rA, rB), rd) < -1e-4) { return true; }
+    }
+  }
+
+  // торцы: нормаль торца вдоль оси, проверка грани сводится к знаку dot(rd, axis)
+  let axis = ba / sqrt(baba);
+  let den = dot(rd, axis);
+  if (abs(den) > 1e-6) {
+    let tA = dot(a - ro, axis) / den;
+    let qA = ro + rd * tA - a;
+    if (dot(qA, qA) <= rA * rA && -den < -1e-4) { return true; }
+    let tB = dot(b - ro, axis) / den;
+    let qB = ro + rd * tB - b;
+    if (dot(qB, qB) <= rB * rB && den < -1e-4) { return true; }
+  }
+
+  return false;
+}
+
+fn anyBox(ro : vec3f, rd : vec3f, i : u32) -> bool {
+  let p = prims[i];
+  let bmin = p.a.xyz;
+  let bmax = p.b.xyz;
+
+  let d = vec3f(
+    select(1e-8, rd.x, abs(rd.x) > 1e-8),
+    select(1e-8, rd.y, abs(rd.y) > 1e-8),
+    select(1e-8, rd.z, abs(rd.z) > 1e-8));
+
+  let inv = 1.0 / d;
+  let t0 = (bmin - ro) * inv;
+  let t1 = (bmax - ro) * inv;
+  let tn = min(t0, t1);
+  let tf = max(t0, t1);
+
+  let tmin = max(max(tn.x, tn.y), tn.z);
+  let tmax = min(min(tf.x, tf.y), tf.z);
+  // нормаль грани в hitBox всегда смотрит против луча — отсев по грани тут не нужен
+  return tmax > tmin && tmin > 1e-3;
+}
+
+// «есть ли тело на пути к солнцу»: сначала сферы, затем конусы, затем кубы
+fn anyPrim(ro : vec3f, rd : vec3f, i : u32) -> bool {
+  if (i < P.counts.x) { return anySphere(ro, rd, i); }
+  if (i < P.counts.x + P.counts.y) { return anyCone(ro, rd, i); }
+  return anyBox(ro, rd, i);
+}

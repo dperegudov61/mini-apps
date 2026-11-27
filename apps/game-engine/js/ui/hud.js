@@ -24,6 +24,8 @@
       pCpu: $('p-cpu'),
       pGpu: $('p-gpu'),
       pScale: $('p-scale'),
+      pPrims: $('p-prims'),
+      pMpx: $('p-mpx'),
       btnPause: $('btn-pause'),
       btnReset: $('btn-reset')
     };
@@ -90,6 +92,18 @@
     e.pCpu.textContent = s.cpu.toFixed(2);
     e.pScale.textContent = (scale || 1).toFixed(2) + '×';
     if (e.pFps) e.pFps.textContent = s.fps.toFixed(0);
+    // сколько тел в сцене и во что обходится мегапиксель кадра — одной меркой на любое устройство;
+    // при упоре в частоту экрана (60 Гц) время кадра ничего не говорит о цене — показываем «—»
+    if (e.pPrims) e.pPrims.textContent = String(s.prims || 0);
+    if (e.pMpx) {
+      var capped = s.avg > 0 && s.avg < 17.5;
+      e.pMpx.textContent = capped ? '—' : (s.msPerMpx || 0).toFixed(1);
+      var mpxCell = e.pMpx.parentNode;
+      if (mpxCell) {
+        mpxCell.title = GE.t('game-engine.pfMpxHint',
+          'frame time per megapixel: grows with the number of bodies and the render scale');
+      }
+    }
 
     if (e.pGpu) {
       var hasGpu = (s.gpu !== null && s.gpu !== undefined);

@@ -10,6 +10,20 @@
 //
 // Перенесено на CPU (так дешевле): 4D-срез, поворот кубов (в буфер едет готовый
 // осевой AABB), цвет и сила солнца, цвет скайбокс-света, положение камеры.
+//
+// === Про цену пикселя ===
+// Кадр здесь стоит «пиксели × (небо + земля + тела + лучи к солнцу)», поэтому дорогое
+// считается реже:
+//   * всё, что зависит только от солнца и камеры, считается на процессоре один раз за кадр
+//     и приезжает в P.frame / P.frame2 (день, закат, видимость солнца, tan(угол/2),
+//     цвет солнца с силой) — раньше это повторялось в каждом пикселе;
+//   * степени с целым показателем (2, 4, 6, 40, 200) — умножениями, а не pow();
+//   * ветви, результат которых точно ноль, не выполняются вовсе: звёзды днём, у горизонта
+//     и рядом с солнцем; ореол и рассеяние — только в стороне солнца; блик — только там,
+//     где на точку падает свет; разметка пола — только когда сетка включена; лучи к солнцу —
+//     только когда солнце над горизонтом.
+// Ни одна из этих ветвей не меняет картинку: они повторяют те же формулы в точках,
+// где формула даёт ноль.
 
 //#include params.wgsl
 //#include primitives.wgsl
@@ -29,6 +43,46 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VSOut {
   res.clip = vec4f(xy, 0.0, 1.0);
   res.uv = vec2f(xy.x * 0.5 + 0.5, 0.5 - xy.y * 0.5);
   return res;
+}
+
+// ------------------------------------------------------------
+// 0. СТЕПЕНИ С ЦЕЛЫМ ПОКАЗАТЕЛЕМ
+//    pow() на слабых GPU (особенно на телефонах) — одна из самых дорогих операций,
+//    а здесь их было до семи на пиксель. Умножения дают тот же результат.
+// ------------------------------------------------------------
+
+fn pow2(x : f32) -> f32 { return x * x; }
+
+fn pow4(x : f32) -> f32 {
+  let x2 = x * x;
+  return x2 * x2;
+}
+
+fn pow6(x : f32) -> f32 {
+  let x2 = x * x;
+  return x2 * x2 * x2;
+}
+
+// x^40 = x^32 · x^8
+fn pow40(x : f32) -> f32 {
+  let x2 = x * x;
+  let x4 = x2 * x2;
+  let x8 = x4 * x4;
+  let x16 = x8 * x8;
+  let x32 = x16 * x16;
+  return x32 * x8;
+}
+
+// x^200 = x^128 · x^64 · x^8
+fn pow200(x : f32) -> f32 {
+  let x2 = x * x;
+  let x4 = x2 * x2;
+  let x8 = x4 * x4;
+  let x16 = x8 * x8;
+  let x32 = x16 * x16;
+  let x64 = x32 * x32;
+  let x128 = x64 * x64;
+  return x128 * x64 * x8;
 }
 
 // ------------------------------------------------------------
@@ -57,9 +111,18 @@ fn hash31(p : f32) -> vec3f {
 
 // ------------------------------------------------------------
 // 2. ЗВЁЗДЫ — сетка ячеек по направлению луча, в каждой ячейке своя звезда
+//    Дорогое (цвет, яркость, мерцание) считается только там, где звезда
+//    действительно накрыла пиксель; остальные случаи — те же нули, но сразу.
 // ------------------------------------------------------------
 
 fn starField(rd : vec3f, ro : vec3f, dayFactor : f32, cosSun : f32) -> vec3f {
+  let zero = vec3f(0.0, 0.0, 0.0);
+
+  // условия, при которых вклад всё равно ноль (см. vis ниже)
+  if (dayFactor >= 1.0) { return zero; }        // день: (1 - day) = 0
+  if (cosSun > 0.985) { return zero; }          // рядом с солнцем: засветка
+  if (rd.y <= -0.02) { return zero; }           // ниже горизонта: купол = 0
+
   let sd = normalize(rd + ro * 0.0008);
 
   let cellF = sd * 90.0;
@@ -68,18 +131,19 @@ fn starField(rd : vec3f, ro : vec3f, dayFactor : f32, cosSun : f32) -> vec3f {
 
   let seed = hash21(vec2f(cell.x, cell.y) + vec2f(cell.z * 17.0));
 
-  let present = step(0.80, hash11(seed + 0.37));
-  if (present < 0.5) { return vec3f(0.0, 0.0, 0.0); }
-
+  if (hash11(seed + 0.37) < 0.80) { return zero; }   // step(0.80, …): в ячейке нет звезды
   let starPos = vec3f(hash11(seed + 1.11), hash11(seed + 2.27), hash11(seed + 3.73));
-  let d3 = fcell - starPos;
   let starRadius = mix(0.22, 0.60, hash11(seed + 5.17));
 
-  let dist = length(d3);
+  let d3 = fcell - starPos;
+  let dist = sqrt(dot(d3, d3));
+  if (dist >= starRadius) { return zero; }           // звезда не накрыла этот пиксель
+
   let shape = 1.0 - smoothstep(starRadius * 0.15, starRadius, dist);
 
   // яркость: совсем тусклых нет — иначе на малом кадре звёзды не видно совсем
-  let brightness = 0.60 + pow(hash11(seed + 7.91), 2.0) * 1.4;
+  let b = hash11(seed + 7.91);
+  let brightness = 0.60 + pow2(b) * 1.4;
   let tintMix = hash31(seed + 5.23).r;
   let tint = mix(vec3f(0.75, 0.85, 1.0), vec3f(1.0, 0.85, 0.7), tintMix);
 
@@ -94,34 +158,38 @@ fn starField(rd : vec3f, ro : vec3f, dayFactor : f32, cosSun : f32) -> vec3f {
 }
 
 // ------------------------------------------------------------
-// 3. НЕБО И СОЛНЦЕ. Цвет и сила солнца приходят с процессора
+// 3. НЕБО И СОЛНЦЕ. Цвет и сила солнца, день и закат приходят с процессора
 //    (зависят от высоты над горизонтом), поэтому закат/ночь — это ползунок.
 // ------------------------------------------------------------
 
-fn skyColor(rd : vec3f, sunDir : vec3f) -> vec3f {
-  let sunHeight = sunDir.y;
-  let dayFactor = smoothstep(-0.25, 0.20, sunHeight);
-  let cosSun = saturate(dot(rd, sunDir));
-
+fn skyColor(rd : vec3f, sun : vec3f, cosSun : f32, dayFactor : f32,
+            sunVis : f32, dusk : f32) -> vec3f {
   let dayNear = vec3f(0.55, 0.75, 1.00);
   let dayFar = vec3f(0.05, 0.12, 0.35);
-  let dayCol = mix(dayFar, dayNear, pow(cosSun, 1.6));
   let nightCol = vec3f(0.01, 0.02, 0.05);
+
+  let dayCol = mix(dayFar, dayNear, pow(cosSun, 1.6));
   var col = mix(nightCol, dayCol, dayFactor);
 
-  // закатная полоса у горизонта
-  let horizon = 1.0 - saturate(abs(rd.y) * 2.5);
-  let dusk = 1.0 - smoothstep(0.0, 0.35, abs(sunHeight));
-  col = mix(col, vec3f(1.0, 0.55, 0.20), horizon * dusk * pow(cosSun, 2.0) * 0.55);
+  // в стороне от солнца ни одна из этих добавок не даёт ничего: экономим три степени
+  if (cosSun > 0.0) {
+    // закатная полоса у горизонта
+    let horizon = 1.0 - saturate(abs(rd.y) * 2.5);
+    col = mix(col, vec3f(1.0, 0.55, 0.20), horizon * dusk * pow2(cosSun) * 0.55);
 
-  // диск, ореол и широкое рассеяние вокруг солнца
-  let sunVis = smoothstep(-0.15, 0.05, sunHeight);
-  let disk = smoothstep(0.9995, 0.9998, cosSun);
-  let halo = pow(cosSun, 200.0);
-  let scatter = pow(cosSun, 6.0);
-  let sun = P.sunColor.rgb * P.sunColor.w;
+    // диск и широкое рассеяние вокруг солнца
+    let disk = smoothstep(0.9995, 0.9998, cosSun);
+    let scatter = pow6(cosSun);
+    var glow = disk * 4.0 + scatter * 0.15;
 
-  col = col + sun * (disk * 4.0 + halo * 0.8 + scatter * 0.15) * sunVis;
+    // ореол виден только вплотную к солнцу (pow(0.5, 200) ≈ 0) — остальным он не нужен
+    if (cosSun > 0.5) {
+      glow = glow + pow200(cosSun) * 0.8;
+    }
+
+    col = col + sun * glow * sunVis;
+  }
+
   return col;
 }
 
@@ -139,20 +207,24 @@ fn groundHit(ro : vec3f, rd : vec3f) -> f32 {
 }
 
 fn groundColor(p : vec3f, dist : f32) -> vec3f {
-  // клетка 2 метра; расстояние до ближайшей линии сетки в метрах
+  // клетка 2 метра
   let cell = 2.0;
   let f = fract(p.xz / cell);
-  let dline = min(f, vec2f(1.0, 1.0) - f) * cell;
-  let d = min(dline.x, dline.y);
-
-  let width = 0.010 + dist * 0.0006;            // вдали линии толще — иначе мерцают
-  let raw = 1.0 - smoothstep(width, width * 2.6, d);
-  let fade = 1.0 - smoothstep(28.0, 110.0, dist);   // к горизонту сетка успокаивается
-  let line = raw * fade * P.extra.w;               // P.extra.w = 0 — пол без разметки
 
   let parity = f32((i32(floor(p.x / cell)) + i32(floor(p.z / cell))) & 1);
   var col = mix(vec3f(0.048, 0.054, 0.066), vec3f(0.078, 0.086, 0.102), parity * 0.85);
-  col = mix(col, vec3f(0.15, 0.34, 0.40), line);
+
+  // разметка пола: при выключенной сетке она умножалась на ноль — теперь не считается
+  if (P.extra.w > 0.5) {
+    let dline = min(f, vec2f(1.0, 1.0) - f) * cell;
+    let d = min(dline.x, dline.y);
+
+    let width = 0.010 + dist * 0.0006;            // вдали линии толще — иначе мерцают
+    let raw = 1.0 - smoothstep(width, width * 2.6, d);
+    let fade = 1.0 - smoothstep(28.0, 110.0, dist);   // к горизонту сетка успокаивается
+    col = mix(col, vec3f(0.15, 0.34, 0.40), raw * fade);
+  }
+
   return col;
 }
 
@@ -178,20 +250,23 @@ fn traceObjects(ro : vec3f, rd : vec3f) -> Hit {
 }
 
 // Жёсткая тень: 0 — между точкой и солнцем есть тело, 1 — свет проходит.
-// Проверяются все примитивы буфера (прозрачных из них нет).
+// Проверяются все примитивы буфера (прозрачных из них нет), каждым — только проверка
+// «тело на пути» (anySphere / anyCone / anyBox в primitives.wgsl): нормаль и цвет для
+// тени не нужны. Циклы раздельные, по видам тел, — так видно, что внутри цикла один
+// и тот же код, и компилятор его вычищает целиком под свой вид тела.
 fn shadowRay(origin : vec3f, sunDir : vec3f) -> f32 {
   let o = origin + sunDir * 1e-3;          // чуть отодвинулись от своей же поверхности
   let coneOffset = P.counts.x;
   let boxOffset = P.counts.x + P.counts.y;
 
   for (var i = 0u; i < P.counts.x; i = i + 1u) {
-    if (hitSphere(o, sunDir, i).t < T_MISS) { return 0.0; }
+    if (anySphere(o, sunDir, i)) { return 0.0; }
   }
   for (var j = 0u; j < P.counts.y; j = j + 1u) {
-    if (hitCone(o, sunDir, coneOffset + j).t < T_MISS) { return 0.0; }
+    if (anyCone(o, sunDir, coneOffset + j)) { return 0.0; }
   }
   for (var k = 0u; k < P.counts.z; k = k + 1u) {
-    if (hitBox(o, sunDir, boxOffset + k).t < T_MISS) { return 0.0; }
+    if (anyBox(o, sunDir, boxOffset + k)) { return 0.0; }
   }
   return 1.0;
 }
@@ -201,22 +276,20 @@ fn shadowRay(origin : vec3f, sunDir : vec3f) -> f32 {
 //    скайбокс-свет всегда + прямое солнце с жёсткой тенью + слабый блик.
 // ------------------------------------------------------------
 
-fn shadeSurface(n : vec3f, albedo : vec3f, rd : vec3f, shadow : f32) -> vec3f {
-  let sunDir = normalize(P.sunDir.xyz);
-  let sun = P.sunColor.rgb * P.sunColor.w;
-
+fn shadeSurface(n : vec3f, albedo : vec3f, rd : vec3f, sun : vec3f,
+                ndl0 : f32, spec0 : f32, shadow : f32) -> vec3f {
   let ambient = P.skyAmbient.rgb * (0.5 + 0.5 * n.y);
-  let ndl = saturate(dot(n, sunDir));
-  let day = smoothstep(-0.05, 0.15, sunDir.y);   // солнце светит только над горизонтом
-  let lit = shadow * day;
+  let lit = shadow * P.frame2.x;                // «день для поверхности» с процессора
 
-  let halfV = normalize(sunDir - rd);
-  let spec = pow(saturate(dot(n, halfV)), 40.0) * lit;
-  let rim = pow(1.0 - saturate(dot(n, -rd)), 4.0);
+  var col = albedo * (ambient + sun * saturate(ndl0) * lit);
 
-  var col = albedo * (ambient + sun * ndl * lit);
-  col = col + sun * spec * 0.35;
-  col = col + P.skyAmbient.rgb * rim * 0.18;
+  // блик уже умножен на lit: в тени и ночью его нет — не считаем степень
+  if (lit > 0.0) {
+    col = col + sun * (pow40(saturate(spec0)) * lit) * 0.35;
+  }
+
+  let rim = 1.0 - saturate(dot(n, -rd));
+  col = col + P.skyAmbient.rgb * pow4(rim) * 0.18;
   return col;
 }
 
@@ -232,18 +305,19 @@ fn fs_main(v : VSOut) -> @location(0) vec4f {
 
   // пиксель → луч (как в исходной версии: базис и угол обзора приходят с процессора)
   let ndc = vec2f(v.uv.x * 2.0 - 1.0, 1.0 - v.uv.y * 2.0);
-  let tanHalf = tan(P.fov * 0.5);
+  let tanHalf = P.frame.x;
   let ro = P.camPos.xyz;
   let rd = normalize(P.camForward.xyz
     + P.camRight.xyz * (ndc.x * tanHalf * aspect)
     + P.camUp.xyz * (ndc.y * tanHalf));
 
-  let sunDir = normalize(P.sunDir.xyz);
-  let dayFactor = smoothstep(-0.25, 0.20, sunDir.y);
+  let sunDir = P.sunDir.xyz;        // единичный: нормирован на процессоре
+  let sun = P.frame2.yzw;           // цвет солнца, уже умноженный на силу
+  let dayFactor = P.frame.y;
   let cosSun = saturate(dot(rd, sunDir));
 
-  // небо: градиент + диск солнца + звёзды (ночью, если включены)
-  var col = skyColor(rd, sunDir);
+  // небо: градиент + диск солнца, звёзды — если включены и ночь
+  var col = skyColor(rd, sun, cosSun, dayFactor, P.frame.z, P.frame.w);
   if (P.extra.z > 0.5) {
     col = col + starField(rd, ro, dayFactor, cosSun);
   }
@@ -257,12 +331,21 @@ fn fs_main(v : VSOut) -> @location(0) vec4f {
 
   if (hit.t < T_MISS) {
     let pos = ro + rd * hit.t;
-    // P.extra.y = 0 — тени выключены (лучи к солнцу не пускаем: экономим самое дорогое)
+
+    // скалярные произведения считаем один раз: они нужны и для проверки,
+    // нужна ли вообще тень, и для самого освещения
+    let ndl0 = dot(hit.normal, sunDir);
+    let halfV = normalize(sunDir - rd);
+    let spec0 = dot(hit.normal, halfV);
+
+    // луч к солнцу пускаем, только если от солнца на точку хоть что-то попадает:
+    // P.extra.y = 0 — тени выключены; P.frame2.x = 0 — солнце под горизонтом;
+    // а если ни диффуза, ни блика не будет (поверхность отвернута от солнца) — тоже незачем
     var shadow = 1.0;
-    if (P.extra.y > 0.5) {
+    if (P.extra.y > 0.5 && P.frame2.x > 0.0 && (ndl0 > 0.0 || spec0 > 0.0)) {
       shadow = shadowRay(pos, sunDir);
     }
-    let surface = shadeSurface(hit.normal, hit.albedo, rd, shadow);
+    let surface = shadeSurface(hit.normal, hit.albedo, rd, sun, ndl0, spec0, shadow);
 
     // дымка: далёкое уходит в цвет неба
     let fog = clamp(1.0 - exp(-hit.t * 0.011), 0.0, 0.94);
