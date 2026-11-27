@@ -5,6 +5,7 @@
   'use strict';
 
   var PARAMS_FLOATS = 48;   // 48 × f32 = 192 Б, см. shaders/params.wgsl
+  var PARAMS_TIME = 3;      // индекс игрового времени в значениях кадра (см. pack.js)
   var PRIM_FLOATS = 12;     // примитив = 3 vec4f = 48 Б, см. shaders/primitives.wgsl
   var MAX_PRIMS = 4096;     // потолок буфера примитивов: 192 КБ, хватает кубу сфер 16³
 
@@ -22,6 +23,12 @@
 
     this.primData = new Float32Array(MAX_PRIMS * PRIM_FLOATS);
     this.primCount = 0;
+
+    // сверка кадра с прошлым: копия того, что уже ушло на GPU. Совпало — подавать нечего
+    this.lastParams = new Float32Array(PARAMS_FLOATS);
+    this.lastPrims = new Float32Array(MAX_PRIMS * PRIM_FLOATS);
+    this.lastCount = -1;
+    this.forced = true;       // нарисовать обязательно: размер кадра, возврат на вкладку
 
     this.pixelScale = 1;      // 0.01…4 — разрешение кадра, главный рычаг отладки производительности
     this.timing = null;       // запрос времени GPU (если браузер дал timestamp-query)
@@ -184,6 +191,43 @@
     if (this.canvas.width === w && this.canvas.height === h) return false;
     this.canvas.width = w;
     this.canvas.height = h;
+    return true;
+  };
+
+  // кадр обязательно нарисовать, даже если числа те же: сменился размер полотна
+  // или вернулись на вкладку — содержимое экрана могло пропасть
+  Renderer.prototype.forceDraw = function () {
+    this.forced = true;
+  };
+
+  // Сверка кадра с прошлым — на процессоре, до подачи на GPU. Сравниваем ровно то,
+  // что уйдёт в буферы: значения кадра и примитивы. Совпало — рисунок будет тот же
+  // байт в байт, и кадр можно не подавать вовсе.
+  // Игровое время (params[3]) не сравниваем: от него зависят только мерцание звёзд
+  // и дизеринг; учитывай мы его — простой не наступал бы никогда.
+  Renderer.prototype.frameChanged = function () {
+    var i, n, changed = this.forced || this.primCount !== this.lastCount;
+
+    if (!changed) {
+      for (i = 0; i < PARAMS_FLOATS; i++) {
+        if (i === PARAMS_TIME) continue;
+        if (this.params[i] !== this.lastParams[i]) { changed = true; break; }
+      }
+    }
+
+    if (!changed) {
+      n = this.primCount * PRIM_FLOATS;
+      for (i = 0; i < n; i++) {
+        if (this.primData[i] !== this.lastPrims[i]) { changed = true; break; }
+      }
+    }
+
+    if (!changed) return false;
+
+    this.forced = false;
+    this.lastParams.set(this.params);
+    this.lastCount = this.primCount;
+    if (this.primCount > 0) this.lastPrims.set(this.primData.subarray(0, this.primCount * PRIM_FLOATS));
     return true;
   };
 

@@ -17,12 +17,13 @@
     this.prims = new Float32Array(CAP);      // тел в сцене: вторая кривая графика
     this.pixels = new Float32Array(CAP);     // пикселей в кадре
     this.busy = new Float32Array(CAP);       // сколько кадр занимал видеоядро, мс
+    this.drawn = new Uint8Array(CAP);        // 1 — кадр рисовали, 0 — картинка не изменилась
     this.head = 0;
     this.count = 0;
     this.skip = 3;   // сколько первых кадров не считать (компиляция шейдера и т.п.)
 
     this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
-      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0, occ: 0 };
+      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0, occ: 0, idle: 0 };
 
     this._colors = null;
     this._colorsAt = 0;
@@ -32,8 +33,9 @@
   // intervalMs — честный интервал между кадрами, cpuMs — занятость JS в кадре,
   // gpuMs — измеренное время прохода (null, если измерение недоступно),
   // prims — тел в сцене, pixels — пикселей в кадре (для «мс на мегапиксель»),
-  // busyMs — сколько кадр занимал видеоядро по часам (от подачи до готовности)
-  Perf.prototype.push = function (intervalMs, cpuMs, gpuMs, prims, pixels, busyMs) {
+  // busyMs — сколько кадр занимал видеоядро по часам (от подачи до готовности),
+  // drawn — 1, если кадр действительно рисовали (0 — картинка не изменилась)
+  Perf.prototype.push = function (intervalMs, cpuMs, gpuMs, prims, pixels, busyMs, drawn) {
     // первые кадры после сброса — компиляция шейдера и первый показ кадра; они
     // в сотни раз длиннее обычных и испортили бы среднее и p95
     if (this.skip > 0) {
@@ -52,6 +54,7 @@
     this.prims[i] = prims > 0 ? prims : 0;
     this.pixels[i] = pixels > 0 ? pixels : 0;
     this.busy[i] = (typeof busyMs === 'number' && busyMs > 0) ? Math.min(busyMs, intervalMs) : 0;
+    this.drawn[i] = (drawn === undefined || drawn > 0) ? 1 : 0;
     this.lastPrims = this.prims[i];
 
     this.head = (i + 1) % CAP;
@@ -64,7 +67,7 @@
     this.count = 0;
     this.skip = 3;   // после сброса пропускаем первый медленный кадр компиляции
     this.stats = { fps: 0, avg: 0, best: 0, worst: 0, p95: 0, cpu: 0, gpu: null,
-      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0, occ: 0 };
+      prims: 0, maxPrims: 0, mpx: 0, msPerMpx: 0, occ: 0, idle: 0 };
   };
 
   // первый индекс кольца (самый старый из запомненных кадров)
@@ -78,6 +81,7 @@
 
     var sum = 0, cpuSum = 0, gpuSum = 0, gpuN = 0, primSum = 0, maxPrims = 0, lastPixels = 0;
     var busySum = 0;
+    var drawnSum = 0;
     var best = 1e9, worst = 0;
     var vals = new Array(n);
 
@@ -88,6 +92,7 @@
       sum += v;
       cpuSum += this.cpu[i];
       busySum += this.busy[i];
+      drawnSum += this.drawn[i];
       primSum += this.prims[i];
       if (this.prims[i] > maxPrims) maxPrims = this.prims[i];
       if (v < best) best = v;
@@ -116,7 +121,9 @@
       msPerMpx: mpx > 0 ? avg / mpx : 0,
       // занятость видео ядра: работа кадра / время от кадра до кадра. 100% — ядро
       // занято всё время, 50% — половину времени оно свободно для всего остального
-      occ: avg > 0 ? Math.min(100, (busySum / n) / avg * 100) : 0
+      occ: avg > 0 ? Math.min(100, (busySum / n) / avg * 100) : 0,
+      // доля кадров, на которых ничего не рисовали: 100% — простой, картинка стоит
+      idle: (n - drawnSum) / n * 100
     };
   };
 

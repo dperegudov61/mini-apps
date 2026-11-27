@@ -48,6 +48,7 @@ game-engine.pfMpx	ms per Mpx	мс на Мпикс
 game-engine.pfMpxHint	frame time per megapixel: grows with the number of bodies and the render scale	время кадра на мегапиксель: растёт от числа тел и от масштаба рендера
 game-engine.pfOcc	core busy, %	занятость ядра, %
 game-engine.pfOccHint	share of time the GPU core is busy: 100% — the queue never empties, 50% — the core is half idle	доля времени, когда видеоядро занято: 100% — очередь не пустеет, 50% — половину времени ядро свободно
+game-engine.pfOccIdle	the picture is not changing: frames are not drawn, the GPU core is idle	картинка не меняется: кадры не рисуются, видеоядро свободно
 game-engine.camera	Camera	Камера
 game-engine.cameraNote	the same in every scene: drag orbits, wheel zooms, keys move the target	одинаково во всех сценах: мышь облетает, колесо приближает, клавиши двигают цель
 game-engine.hintDragKey	drag	мышь

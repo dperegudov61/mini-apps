@@ -73,11 +73,12 @@
     var s = perf.stats;
     var gpu = (s.gpu === null || s.gpu === undefined) ? '—' : s.gpu.toFixed(2);
     var occ = s.occ > 0 ? Math.round(s.occ) + '%' : '—';
+    var idle = s.idle > 50 ? ' · idle' : '';
     return 'fps ' + s.fps.toFixed(0) + ' · ' + s.avg.toFixed(1) + ' ms\n' +
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
       renderer.canvas.width + '×' + renderer.canvas.height + ' · ' +
       renderer.pixelScale.toFixed(2) + '× · ' + counts.total + ' prim\n' +
-      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ;
+      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + idle;
   }
 
   // ---- открыть сцену: свой набор объектов, своё окружение, своё положение камеры ----
@@ -159,11 +160,16 @@
     var last = performance.now();
     var adaptAcc = 0;
     var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс
+    var idleRun = 0;       // сколько кадров подряд не рисовали (в простое)
 
     // авто-масштаб: держим кадр около 60 Гц, меняя разрешение рендера.
     // Шаг множителем, а не прибавлением: от 2× до 0.01× иначе не добраться.
-    function adapt(dtSec) {
+    // В простое не трогаем ничего: там кадров нет, и по «быстрому» интервалу
+    // он бы улетел на 4×, а вернувшись к движению мы получили бы тяжёлый кадр.
+    function adapt(dtSec, drew) {
       if (!(gfx.auto > 0.5)) return;
+      if (!drew) { adaptAcc = 0; return; }
+
       adaptAcc += dtSec;
       if (adaptAcc < 0.5) return;
       adaptAcc = 0;
@@ -187,39 +193,57 @@
       var t0 = performance.now();
 
       hud.tick(rawSec);
-      renderer.resize();
+
+      var resized = renderer.resize();
+      if (resized) renderer.forceDraw();   // после смены размера текстур старое содержимое не годится
 
       // камера живая всегда; на паузе сцена замирает, но ползунки продолжают работать
       camera.update(dt);
       active.inst.update(paused ? 0 : dt, active.settings);
 
       var counts = GE.writeFrame(renderer, active.inst, camera, gfx);
-      renderer.uploadAll();
-      renderer.render();
 
-      frames += 1;
-      hud.setInfo(renderer.canvas.width, renderer.canvas.height, frames,
-        counts.total, renderer.primBytes());
+      // Сверка с прошлым кадром на процессоре: если на GPU ушли бы те же числа, рисунок
+      // не изменится — кадр не подаём вовсе. В простое картинка стоит, ядро не работает.
+      var drew = renderer.frameChanged();
+
+      if (drew) {
+        // вернулись из простоя — меряем заново: в окне остались быстрые «пустые» кадры,
+        // и авто-масштаб счёл бы, что всé дёшево
+        if (idleRun > 20) perf.reset();
+        idleRun = 0;
+
+        renderer.uploadAll();
+        renderer.render();
+        frames += 1;
+      } else {
+        idleRun += 1;
+      }
 
       // статистика: интервал между кадрами, занятость процессора, время GPU.
       // Кадр после возврата на вкладку — сотни миллисекунд — в статистику не берём;
       // а вот медленные кадры слабого устройства берём: иначе на 4× график пустой.
+      // Пустой кадр (ничего не изменилось) идёт с нулевой занятостью ядра.
       if (document.visibilityState !== 'hidden') {
-        perf.push(rawMs, performance.now() - t0, renderer.gpuMs(),
-          counts.total, renderer.canvas.width * renderer.canvas.height, lastBusy);
+        perf.push(rawMs, performance.now() - t0, drew ? renderer.gpuMs() : null,
+          counts.total, renderer.canvas.width * renderer.canvas.height,
+          drew ? lastBusy : 0, drew ? 1 : 0);
       }
       perf.draw();
-      hud.setPerf(perf.stats, renderer.pixelScale);
 
-      // строка состояния сцены и отладочная строка поверх кадра — пять раз в секунду
+      // строки состояния и цифры обновляем пять раз в секунду: в простое это вся работа
       var nowT = performance.now();
       if (nowT - uiAt >= 200) {
         uiAt = nowT;
+        hud.setInfo(renderer.canvas.width, renderer.canvas.height, frames,
+          counts.total, renderer.primBytes());
+        hud.setPerf(perf.stats, renderer.pixelScale);
         if (active.inst.status) panels.setStatus(active.inst.status(active.settings));
         hud.setDebug(gfx.debug > 0.5 ? debugText(counts) : '');
       }
 
-      adapt(rawSec);
+      adapt(rawSec, drew);
+      return drew;
     }
 
     // ---- подача кадра: один кадр в полёте на видеокарте ----
@@ -247,13 +271,17 @@
     function frame(now) {
       if (busy) { nextFrame(); return; }
 
+      var drew = false;
       try {
-        step(now);
+        drew = step(now);
       } catch (err) {
         console.error(err);
         hud.fail(err);
         return;
       }
+
+      // ничего не подавали — ждать нечего: сразу к следующей проверке
+      if (!drew) { lastBusy = 0; nextFrame(); return; }
 
       // ждём именно этот кадр: onSubmittedWorkDone срабатывает, когда очередь опустела
       var queue = gpu.device.queue;
@@ -277,10 +305,11 @@
       queue.onSubmittedWorkDone().then(done, done);
     }
 
-    // вернулись на вкладку — начинаем мерить заново
+    // вернулись на вкладку — начинаем мерить заново и перерисовываем
     document.addEventListener('visibilitychange', function () {
       last = performance.now();
       perf.reset();
+      renderer.forceDraw();
     });
 
     requestAnimationFrame(frame);
