@@ -62,7 +62,7 @@
     this.texSmall = null; this.viewSmall = null;
 
     this.bgDyn = null; this.bgA = null; this.bgB = null;          // «текстура → экран»
-    this.bgSeed = null; this.bgFromA = null; this.bgFromB = null; // слияние прохода
+    this.bgFromA = null; this.bgFromB = null;   // слияние прохода
 
     this.mergeParams = new Float32Array(4);   // шаг решётки и смещение (см. shaders/blit.wgsl)
 
@@ -349,6 +349,7 @@
     this.bgDyn = copyGroup(this.viewDyn, this.sampler);
     this.bgA = copyGroup(this.viewA, this.sampler);
     this.bgB = copyGroup(this.viewB, this.sampler);
+    this.bgSmall = copyGroup(this.viewSmall, this.sampler);
 
     var self = this;
     function mergeGroup(accView) {
@@ -364,7 +365,6 @@
       });
     }
 
-    this.bgSeed = mergeGroup(this.viewDyn);
     this.bgFromA = mergeGroup(this.viewA);
     this.bgFromB = mergeGroup(this.viewB);
   };
@@ -517,11 +517,15 @@
     this.submit(encoder);
   };
 
-  // Наполнение статики: шаг решётки step, проход k (0…step²−1).
-  // Решётка step = 2 — четыре прохода по четверти точек: после двух кадров у кадра
-  // вдвое больше точек, чем у одного, после четырёх он собран целиком.
+  // Наполнение статики: шаг решётки step, проход k.
   //
-  // Порядок проходов — не подряд, а с шагом по всей таблице смещений (fillStride):
+  // Проход 0 — весь кадр сразу крупным пикселем размером в шаг: картинка полная,
+  // без дыр и без мутной подложки (дорого не дороже остальных — та же доля 1/step²).
+  // Проходы 1…step² — уточнение: каждый кладёт 1/step² точек в полном разрешении.
+  // Решётка step = 2 — четыре уточняющих прохода: после двух кадров у кадра вдвое
+  // больше точек, чем у одного, после четырёх он собран целиком.
+  //
+  // Порядок уточнений — не подряд, а с шагом по всей таблице смещений (fillStride):
   // при порядке «подряд» первые проходы добивают верхние строки решётки, и картинка
   // наполняется полосами сверху вниз. С шагом соседние проходы ложатся далеко друг
   // от друга — точки разбрасываются по всему кадру, как на шахматной доске.
@@ -529,10 +533,6 @@
     this.ensureTextures();
     var s = Math.max(1, Math.round(step || 1));
     var cells = s * s;
-    var i = s > 1 ? (k * (this.fillStride || 1)) % cells : 0;
-    var ox = s > 1 ? (i % s) : 0;
-    var oy = s > 1 ? Math.floor(i / s) : 0;
-    var toA = (k % 2) === 0;
     var encoder = this.device.createCommandEncoder({ label: 'fill' });
 
     if (s === 1) {
@@ -543,13 +543,27 @@
       return;
     }
 
+    if (k === 0) {
+      // первый проход: весь кадр пикселем размером в шаг, затем растяжка на полный
+      this.drawScene(encoder, this.viewSmall, this.smallW, this.smallH,
+        this.fullW, this.fullH, true, 1, 0, 0);
+      this.blit(encoder, this.bgSmall, this.viewA);
+      this.blit(encoder, this.bgA, null);
+      this.submit(encoder);
+      return;
+    }
+
+    var i = ((k - 1) * (this.fillStride || 1)) % cells;
+    var ox = i % s;
+    var oy = Math.floor(i / s);
+    var toA = (k % 2) === 0;
+
     // проход сцены: только своя доля точек, в уменьшенную текстуру
     this.drawScene(encoder, this.viewSmall, this.smallW, this.smallH,
       this.fullW, this.fullH, true, s, ox, oy);
 
-    // слияние: первый проход кладёт точки на растянутый кадр движения,
-    // дальше — на предыдущий собранный (две текстуры по очереди)
-    var acc = (k === 0) ? this.bgSeed : ((k % 2) === 1 ? this.bgFromA : this.bgFromB);
+    // слияние: точки ложатся на предыдущий собранный кадр (две текстуры по очереди)
+    var acc = (k % 2) === 1 ? this.bgFromA : this.bgFromB;
     this.merge(encoder, toA ? this.viewA : this.viewB, acc, s, ox, oy);
 
     this.blit(encoder, toA ? this.bgA : this.bgB, null);

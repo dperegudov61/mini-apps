@@ -26,7 +26,8 @@
   var warm = 0;              // сколько кадров после смены состояния не идёт в счёт авто-масштаба
   var lastWork = 0;          // цена последнего кадра, мс: что дороже — процессор или видеоядро
   var probeScale = 0;        // масштаб, к которому вернёмся, если проба не влезла (0 — пробы нет)
-  var fillSteps = 1;         // шаг решётки наполнения (проходов — fillSteps²)
+  var fillSteps = 1;         // шаг решётки наполнения
+  var fillPasses = 1;        // сколько всего проходов: крупный кадр + уточнения
   var fillK = 0;             // какой проход наполнения рисуем сейчас
   var fullCost = 0;          // во сколько обходится полный кадр, мс (замер наполнения)
   var fillFixed = false;     // план наполнения уже поправлен по первому проходу
@@ -109,7 +110,7 @@
     var gpu = (s.gpu === null || s.gpu === undefined) ? '—' : s.gpu.toFixed(2);
     var occ = s.occ > 0 ? Math.round(s.occ) + '%' : '—';
     var state = mode === 'static' ? ' · idle'
-      : (mode === 'fill' ? ' · fill ' + fillK + '/' + (fillSteps * fillSteps) : '');
+      : (mode === 'fill' ? ' · fill ' + fillK + '/' + fillPasses : '');
     var shown = mode === 'dynamic' ? renderer.pixelScale : 1;
     return 'fps ' + s.fps.toFixed(0) + ' · ' + s.avg.toFixed(1) + ' ms\n' +
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
@@ -390,6 +391,7 @@
         // содержимое застыло: запоминаем рабочий масштаб движения и начинаем наполнение
         dynScale = renderer.pixelScale;
         fillSteps = planFill();
+        fillPasses = fillSteps > 1 ? fillSteps * fillSteps + 1 : 1;
         fillK = 0;
         fillFixed = false;
         mode = 'fill';
@@ -414,6 +416,7 @@
               Math.max(1, Math.ceil(Math.sqrt(full / WORK_PASS))));
             if (want !== fillSteps) {
               fillSteps = want;
+              fillPasses = fillSteps > 1 ? fillSteps * fillSteps + 1 : 1;
               fillK = 0;
               renderer.beginFill(fillSteps);
             }
@@ -425,7 +428,7 @@
         renderer.renderFill(fillSteps, fillK);
         fillK += 1;
         draw = true;
-        if (fillK >= fillSteps * fillSteps) mode = 'static';   // кадр собран целиком
+        if (fillK >= fillPasses) mode = 'static';   // кадр собран целиком
       } else if (draw) {
         renderer.uploadAll();
         renderer.render();
