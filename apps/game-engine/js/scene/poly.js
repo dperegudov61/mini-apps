@@ -118,7 +118,7 @@
     fb: 'polygonal model',
     note: 'game-engine.scenePolyNote',
     noteFb: 'a triangle mesh from an OBJ file, traced through a bounding-volume tree',
-    camera: { target: [0, 1.05, 0], yaw: 0.5, pitch: 0.17, distance: 4.6 },
+    camera: { target: [0, 1.05, 0], yaw: 0.5, pitch: 0.16, distance: 3.7 },
     params: [
       GE.SceneParts.sun(36),
       GE.SceneParts.speed(1),
