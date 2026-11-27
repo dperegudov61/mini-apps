@@ -1,11 +1,27 @@
-/* pack.js — солнце и упаковка сцены в буферы.
+/* pack.js — солнце, упаковка сцены в буферы и компиляция CSG-программы.
    Это единственное место, где задан порядок float'ов uniform-буфера (shaders/params.wgsl)
-   и раскладка буфера примитивов (shaders/primitives.wgsl).
-   Сцена приходит сюда обычными числами: массив объектов, солнце, окружение. */
+   и раскладка буфера примитивов + CSG-программы (shaders/primitives.wgsl).
+   Сцена приходит сюда обычными числами: массив объектов, солнце, окружение.
+
+   Объект сцены (то, что читает packScene):
+     { kind, color:[r,g,b], invert:0|1, doubleSided:0|1, matId:0, id?, ops:[{op, ref}] }
+   + геометрия вида (см. ниже). Фабрики GE.Prim.* собирают эти поля (js/scene/prims.js).
+
+   ops — булевы зависимости: { op:'union'|'intersect'|'subtract', ref:<id другого объекта> }.
+   Объект без ops и без ссылок на него — корень (рисуется). Объект, на который ссылаются, —
+   часть; он рисуется только внутри того, кто на него ссылается. */
 (function (GE) {
   'use strict';
 
   var DEG = Math.PI / 180;
+  var PRIM_FLOATS = GE.PRIM_FLOATS || 32;
+
+  var KIND = {
+    sphere: 1, box: 2, torus: 3, cone: 4, cylinder: 5, plane: 6, rect: 7, triangle: 8
+  };
+
+  // коды операций — должны совпадать с shaders/primitives.wgsl
+  var OP = { LEAF: 0, UNION: 1, INTER: 2, SUB: 3, ROOT: 4 };
 
   // азимут солнца зафиксирован: сцена смотрит так, что тени идут к камере
   var SUN_AZIMUTH = 215 * DEG;
@@ -43,67 +59,131 @@
 
   GE.SUN_AZIMUTH = SUN_AZIMUTH;
 
-  // ---- объекты сцены → буфер примитивов (сначала сферы, затем конусы, затем кубы) ----
-  // objects: {kind:'sphere', x,y,z,r, color}, {kind:'cone', a, rA, b, rB, color},
-  //          {kind:'box', min, max, color}
-  // Возвращает, сколько чего уехало на GPU: буфер не резиновый, лишнее не пишется.
-  GE.packObjects = function (objects, data) {
-    var limit = data.length;
-    var o = 0;
-    var counts = { spheres: 0, cones: 0, boxes: 0, total: 0 };
-    var i, p, c;
+  // ---- один примитив в буфер (32 float, см. shaders/primitives.wgsl) ----
+  function writePrim(d, o, obj) {
+    d[o] = KIND[obj.kind] || 0;
+    d[o + 1] = obj.invert ? 1 : 0;
+    d[o + 2] = obj.doubleSided ? 1 : 0;
+    d[o + 3] = obj.matId || 0;
 
-    function done() {
-      counts.total = counts.spheres + counts.cones + counts.boxes;
-      return counts;
+    for (var k = 4; k < 28; k++) d[o + k] = 0;
+    var c = obj.color || [0.8, 0.8, 0.8];
+    d[o + 28] = c[0];
+    d[o + 29] = c[1];
+    d[o + 30] = c[2];
+    d[o + 31] = 0;
+
+    var k = obj.kind;
+    if (k === 'sphere') {
+      d[o + 4] = obj.x; d[o + 5] = obj.y; d[o + 6] = obj.z; d[o + 7] = obj.r;
+    } else if (k === 'box') {
+      d[o + 4] = obj.cx; d[o + 5] = obj.cy; d[o + 6] = obj.cz;
+      d[o + 8] = obj.hx; d[o + 9] = obj.hy; d[o + 10] = obj.hz;
+      var X = obj.X, Y = obj.Y;
+      d[o + 12] = X[0]; d[o + 13] = X[1]; d[o + 14] = X[2];
+      d[o + 16] = Y[0]; d[o + 17] = Y[1]; d[o + 18] = Y[2];
+    } else if (k === 'torus') {
+      d[o + 4] = obj.cx; d[o + 5] = obj.cy; d[o + 6] = obj.cz;
+      d[o + 8] = obj.R; d[o + 9] = obj.r;
+      var n = obj.n;
+      d[o + 12] = n[0]; d[o + 13] = n[1]; d[o + 14] = n[2];
+    } else if (k === 'cone' || k === 'cylinder') {
+      d[o + 4] = obj.ax; d[o + 5] = obj.ay; d[o + 6] = obj.az; d[o + 7] = obj.rA;
+      d[o + 8] = obj.bx; d[o + 9] = obj.by; d[o + 10] = obj.bz; d[o + 11] = obj.rB;
+      d[o + 12] = obj.n1[0]; d[o + 13] = obj.n1[1]; d[o + 14] = obj.n1[2]; d[o + 15] = obj.d1;
+      d[o + 16] = obj.n2[0]; d[o + 17] = obj.n2[1]; d[o + 18] = obj.n2[2]; d[o + 19] = obj.d2;
+    } else if (k === 'plane') {
+      d[o + 4] = obj.px; d[o + 5] = obj.py; d[o + 6] = obj.pz;
+      d[o + 8] = obj.nx; d[o + 9] = obj.ny; d[o + 10] = obj.nz;
+    } else if (k === 'rect') {
+      d[o + 4] = obj.cx; d[o + 5] = obj.cy; d[o + 6] = obj.cz;
+      var u = obj.u, v = obj.v;
+      d[o + 8] = u[0]; d[o + 9] = u[1]; d[o + 10] = u[2];
+      d[o + 12] = v[0]; d[o + 13] = v[1]; d[o + 14] = v[2];
+      d[o + 16] = obj.hw; d[o + 17] = obj.hh;
+    } else if (k === 'triangle') {
+      var v0 = obj.v0, v1 = obj.v1, v2 = obj.v2;
+      d[o + 4] = v0[0]; d[o + 5] = v0[1]; d[o + 6] = v0[2];
+      d[o + 8] = v1[0]; d[o + 9] = v1[1]; d[o + 10] = v1[2];
+      d[o + 12] = v2[0]; d[o + 13] = v2[1]; d[o + 14] = v2[2];
+    }
+  }
+
+  // ---- постфиксная запись булева выражения объекта (рекурсия по зависимостям) ----
+  function emitCSG(index, objects, byId, csg, pos) {
+    var obj = objects[index];
+    var ops = obj.ops;
+    if (!ops || !ops.length) {
+      csg[pos++] = OP.LEAF;
+      csg[pos++] = index;
+      return pos;
+    }
+    csg[pos++] = OP.LEAF;
+    csg[pos++] = index;
+    for (var j = 0; j < ops.length; j++) {
+      var refIdx = byId[ops[j].ref];
+      if (refIdx == null) continue;
+      pos = emitCSG(refIdx, objects, byId, csg, pos);
+      var code = OP.UNION;
+      if (ops[j].op === 'intersect') code = OP.INTER;
+      else if (ops[j].op === 'subtract') code = OP.SUB;
+      csg[pos++] = code;
+      csg[pos++] = 0;
+    }
+    return pos;
+  }
+
+  // ---- объекты сцены → буфер примитивов + CSG-программа ----
+  // Возвращает { primCount, csg, total }.
+  GE.packScene = function (objects, renderer) {
+    var data = renderer.primData;
+    var csg = renderer.csgData;
+    var limit = data.length;      // float'ов
+    var maxCsg = csg.length;      // u32 (по 2 на инструкцию)
+
+    // id → индекс
+    var byId = {};
+    var ids = [];
+    for (var i = 0; i < objects.length; i++) {
+      var id = objects[i].id != null ? objects[i].id : 'obj' + i;
+      ids[i] = id;
+      byId[id] = i;
     }
 
-    function room() { return o + 12 <= limit; }
-
+    // на кого ссылаются — те не корни
+    var referenced = {};
     for (i = 0; i < objects.length; i++) {
-      p = objects[i];
-      if (p.kind !== 'sphere') continue;
-      if (!room()) return done();
-      data[o] = p.x; data[o + 1] = p.y; data[o + 2] = p.z; data[o + 3] = p.r;
-      data[o + 4] = 0; data[o + 5] = 0; data[o + 6] = 0; data[o + 7] = 0;
-      c = p.color;
-      data[o + 8] = c[0]; data[o + 9] = c[1]; data[o + 10] = c[2]; data[o + 11] = 0;
-      o += 12;
-      counts.spheres += 1;
+      var ops = objects[i].ops;
+      if (ops) for (var j = 0; j < ops.length; j++) referenced[ops[j].ref] = true;
     }
 
+    // примитивы
+    var primCount = 0;
+    for (i = 0; i < objects.length && (i + 1) * PRIM_FLOATS <= limit; i++) {
+      writePrim(data, i * PRIM_FLOATS, objects[i]);
+      primCount = i + 1;
+    }
+
+    // CSG-программа: по корням
+    var pos = 0;
     for (i = 0; i < objects.length; i++) {
-      p = objects[i];
-      if (p.kind !== 'cone') continue;
-      if (!room()) return done();
-      data[o] = p.a[0]; data[o + 1] = p.a[1]; data[o + 2] = p.a[2]; data[o + 3] = p.rA;
-      data[o + 4] = p.b[0]; data[o + 5] = p.b[1]; data[o + 6] = p.b[2]; data[o + 7] = p.rB;
-      c = p.color;
-      data[o + 8] = c[0]; data[o + 9] = c[1]; data[o + 10] = c[2]; data[o + 11] = 0;
-      o += 12;
-      counts.cones += 1;
+      if (referenced[ids[i]]) continue;
+      pos = emitCSG(i, objects, byId, csg, pos);
+      if (pos + 2 > maxCsg) break;
+      csg[pos++] = OP.ROOT;
+      csg[pos++] = 0;
     }
+    var csgCount = pos >> 1;
 
-    for (i = 0; i < objects.length; i++) {
-      p = objects[i];
-      if (p.kind !== 'box') continue;
-      if (!room()) return done();
-      data[o] = p.min[0]; data[o + 1] = p.min[1]; data[o + 2] = p.min[2]; data[o + 3] = 0;
-      data[o + 4] = p.max[0]; data[o + 5] = p.max[1]; data[o + 6] = p.max[2]; data[o + 7] = 0;
-      c = p.color;
-      data[o + 8] = c[0]; data[o + 9] = c[1]; data[o + 10] = c[2]; data[o + 11] = 0;
-      o += 12;
-      counts.boxes += 1;
-    }
-
-    return done();
+    return { primCount: primCount, csg: csgCount, total: primCount };
   };
 
-  // ---- кадр целиком: примитивы + значения камеры, солнца и окружения ----
+  // ---- кадр целиком: примитивы + CSG + значения камеры, солнца и окружения ----
   // scene: {objects, sun, env:{exposure, stars, grid}}, gfx: {shadows}
   GE.writeFrame = function (renderer, scene, camera, gfx) {
-    var counts = GE.packObjects(scene.objects, renderer.primData);
-    renderer.primCount = counts.total;
+    var counts = GE.packScene(scene.objects, renderer);
+    renderer.primCount = counts.primCount;
+    renderer.csgCount = counts.csg;
 
     var out = renderer.params;
     var cu = renderer.paramsU32;
@@ -153,9 +233,9 @@
     out[31] = 0;
 
     // [32..35] — те же байты, что и counts: пишем только через u32-вид
-    cu[32] = counts.spheres;
-    cu[33] = counts.cones;
-    cu[34] = counts.boxes;
+    cu[32] = counts.primCount;
+    cu[33] = counts.csg;
+    cu[34] = 0;
     cu[35] = 0;
 
     out[36] = env.exposure;

@@ -19,6 +19,11 @@ game-engine.benchCount	objects	объектов
 game-engine.benchFill	fill now	заполнить сразу
 game-engine.benchStatus	{0} / {1} spheres · {2}/s	{0} / {1} сфер · {2}/с
 game-engine.benchFull	the cube is full: {0} spheres	куб заполнен: {0} сфер
+game-engine.scenePrims	primitives & surfaces	примитивы и поверхности
+game-engine.scenePrimsNote	every primitive and surface, plus boolean ops: a drilled sphere and a dumbbell	все примитивы и поверхности, плюс булевы операции: просверленная сфера и гантель
+game-engine.primsTurn	box rotation	поворот куба
+game-engine.primsTilt	torus tilt	наклон тора
+game-engine.primsStatus	{0} primitives · boolean ops: subtract and union	{0} примитивов · булевы операции: вычитание и объединение
 game-engine.sunHeight	sun height	высота солнца
 game-engine.speed	animation speed	скорость анимации
 game-engine.exposure	brightness	яркость

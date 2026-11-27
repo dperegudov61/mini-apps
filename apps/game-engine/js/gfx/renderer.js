@@ -17,8 +17,9 @@
   var PARAMS_FLOATS = 52;   // 52 × f32 = 208 Б, см. shaders/params.wgsl
   var PARAMS_TIME = 3;      // индекс игрового времени в значениях кадра (см. pack.js)
   var PARAMS_MASK = 48;     // .x шаг решётки (1 — весь кадр), .y и .z — смещение
-  var PRIM_FLOATS = 12;     // примитив = 3 vec4f = 48 Б, см. shaders/primitives.wgsl
-  var MAX_PRIMS = 32768;    // потолок буфера примитивов: 1.5 МБ, куб сфер 32³ (32768)
+  var PRIM_FLOATS = 32;     // примитив = 8 vec4f = 128 Б, см. shaders/primitives.wgsl
+  var MAX_PRIMS = 32768;    // потолок буфера примитивов: 4 МБ, куб сфер 32³ (32768)
+  var MAX_CSG = 131072;     // потолок CSG-программы: инструкций (2 u32 на инструкцию)
   var CLEAR = { r: 0.02, g: 0.03, b: 0.04, a: 1 };
 
   function Renderer(gpu, canvas) {
@@ -35,10 +36,13 @@
 
     this.primData = new Float32Array(MAX_PRIMS * PRIM_FLOATS);
     this.primCount = 0;
+    this.csgData = new Uint32Array(MAX_CSG * 2);
+    this.csgCount = 0;
 
     // сверка кадра с прошлым: копия того, что уже ушло на GPU. Совпало — подавать нечего
     this.lastParams = new Float32Array(PARAMS_FLOATS);
     this.lastPrims = new Float32Array(MAX_PRIMS * PRIM_FLOATS);
+    this.lastCsg = new Uint32Array(MAX_CSG * 2);
     this.lastCount = -1;
     this.forced = true;       // нарисовать обязательно: размер кадра, возврат на вкладку
 
@@ -129,10 +133,17 @@
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
-    // примитивы сцены: сферы, конусы, кубы (shaders/primitives.wgsl)
+    // примитивы сцены: сферы, кубы, торы, конусы, поверхности (shaders/primitives.wgsl)
     this.primBuffer = device.createBuffer({
       label: 'primitives (storage)',
       size: MAX_PRIMS * PRIM_FLOATS * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+
+    // CSG-программа: плоская постфиксная запись булевых операций (shaders/primitives.wgsl)
+    this.csgBuffer = device.createBuffer({
+      label: 'csg (storage)',
+      size: MAX_CSG * 2 * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
@@ -141,7 +152,8 @@
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuffer } },
-        { binding: 1, resource: { buffer: this.primBuffer } }
+        { binding: 1, resource: { buffer: this.primBuffer } },
+        { binding: 2, resource: { buffer: this.csgBuffer } }
       ]
     });
 
@@ -398,12 +410,20 @@
       }
     }
 
+    if (!changed) {
+      n = this.csgCount * 2;
+      for (i = 0; i < n; i++) {
+        if (this.csgData[i] !== this.lastCsg[i]) { changed = true; break; }
+      }
+    }
+
     if (!changed) return false;
 
     this.forced = false;
     this.lastParams.set(this.params);
     this.lastCount = this.primCount;
     if (this.primCount > 0) this.lastPrims.set(this.primData.subarray(0, this.primCount * PRIM_FLOATS));
+    if (this.csgCount > 0) this.lastCsg.set(this.csgData.subarray(0, this.csgCount * 2));
     return true;
   };
 
@@ -414,11 +434,14 @@
     if (this.primCount > 0) {
       queue.writeBuffer(this.primBuffer, 0, this.primData, 0, this.primCount * PRIM_FLOATS);
     }
+    if (this.csgCount > 0) {
+      queue.writeBuffer(this.csgBuffer, 0, this.csgData, 0, this.csgCount * 2);
+    }
   };
 
   // сколько байт буфера примитивов занято — для метрики «cpu → gpu»
   Renderer.prototype.primBytes = function () {
-    return this.primCount * PRIM_FLOATS * 4;
+    return this.primCount * PRIM_FLOATS * 4 + this.csgCount * 2 * 4;
   };
 
   // ---- проходы ------------------------------------------------------------
@@ -590,5 +613,7 @@
 
   GE.PARAMS_FLOATS = PARAMS_FLOATS;
   GE.MAX_PRIMS = MAX_PRIMS;
+  GE.MAX_CSG = MAX_CSG;
+  GE.PRIM_FLOATS = PRIM_FLOATS;
   GE.Renderer = Renderer;
 })(window.GE = window.GE || {});

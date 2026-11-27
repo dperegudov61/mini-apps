@@ -229,47 +229,11 @@ fn groundColor(p : vec3f, dist : f32) -> vec3f {
 }
 
 // ------------------------------------------------------------
-// 5. ОБЪЕКТЫ СЦЕНЫ: ближайшее непрозрачное тело из буфера примитивов
+// 5. ОБЪЕКТЫ СЦЕНЫ: ближайшая видимая поверхность и тень.
+//    Всё считает CSG-интерпретатор из primitives.wgsl (traceScene / shadowScene):
+//    сцена упакована в буфер примитивов и плоскую CSG-программу, корни программы
+//    и есть объекты; булевы операции объединяют тела в один корень.
 // ------------------------------------------------------------
-
-fn traceObjects(ro : vec3f, rd : vec3f) -> Hit {
-  var best = miss();
-  let coneOffset = P.counts.x;
-  let boxOffset = P.counts.x + P.counts.y;
-
-  for (var i = 0u; i < P.counts.x; i = i + 1u) {
-    best = nearest(best, hitSphere(ro, rd, i));
-  }
-  for (var j = 0u; j < P.counts.y; j = j + 1u) {
-    best = nearest(best, hitCone(ro, rd, coneOffset + j));
-  }
-  for (var k = 0u; k < P.counts.z; k = k + 1u) {
-    best = nearest(best, hitBox(ro, rd, boxOffset + k));
-  }
-  return best;
-}
-
-// Жёсткая тень: 0 — между точкой и солнцем есть тело, 1 — свет проходит.
-// Проверяются все примитивы буфера (прозрачных из них нет), каждым — только проверка
-// «тело на пути» (anySphere / anyCone / anyBox в primitives.wgsl): нормаль и цвет для
-// тени не нужны. Циклы раздельные, по видам тел, — так видно, что внутри цикла один
-// и тот же код, и компилятор его вычищает целиком под свой вид тела.
-fn shadowRay(origin : vec3f, sunDir : vec3f) -> f32 {
-  let o = origin + sunDir * 1e-3;          // чуть отодвинулись от своей же поверхности
-  let coneOffset = P.counts.x;
-  let boxOffset = P.counts.x + P.counts.y;
-
-  for (var i = 0u; i < P.counts.x; i = i + 1u) {
-    if (anySphere(o, sunDir, i)) { return 0.0; }
-  }
-  for (var j = 0u; j < P.counts.y; j = j + 1u) {
-    if (anyCone(o, sunDir, coneOffset + j)) { return 0.0; }
-  }
-  for (var k = 0u; k < P.counts.z; k = k + 1u) {
-    if (anyBox(o, sunDir, boxOffset + k)) { return 0.0; }
-  }
-  return 1.0;
-}
 
 // ------------------------------------------------------------
 // 6. ОСВЕЩЕНИЕ ПОВЕРХНОСТИ
@@ -335,7 +299,7 @@ fn fs_main(v : VSOut) -> @location(0) vec4f {
   }
 
   // ближайшая поверхность: примитив или земля
-  var hit = traceObjects(ro, rd);
+  var hit = traceScene(ro, rd);
   let tg = groundHit(ro, rd);
   if (tg > 0.0 && tg < hit.t) {
     hit = Hit(tg, vec3f(0.0, 1.0, 0.0), groundColor(ro + rd * tg, tg));
@@ -355,7 +319,7 @@ fn fs_main(v : VSOut) -> @location(0) vec4f {
     // а если ни диффуза, ни блика не будет (поверхность отвернута от солнца) — тоже незачем
     var shadow = 1.0;
     if (P.extra.y > 0.5 && P.frame2.x > 0.0 && (ndl0 > 0.0 || spec0 > 0.0)) {
-      shadow = shadowRay(pos, sunDir);
+      shadow = shadowScene(pos, sunDir);
     }
     let surface = shadeSurface(hit.normal, hit.albedo, rd, sun, ndl0, spec0, shadow);
 

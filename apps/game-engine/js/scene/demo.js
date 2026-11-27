@@ -9,11 +9,16 @@
   }
 
   function cone(a, rA, b, rB, color) {
-    return { kind: 'cone', a: a, rA: rA, b: b, rB: rB, color: color };
+    var ax = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    var L = Math.sqrt(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]) || 1;
+    ax = [ax[0] / L, ax[1] / L, ax[2] / L];
+    return GE.Prim.cone(a, rA, b, rB,
+      { p: a, n: [-ax[0], -ax[1], -ax[2]] },
+      { p: b, n: ax }, color);
   }
 
-  function box(min, max, color) {
-    return { kind: 'box', min: min, max: max, color: color };
+  function box(cx, cy, cz, w, h, d, color) {
+    return GE.Prim.box(cx, cy, cz, w, h, d, [0, 0, 0], color);
   }
 
   var FLOAT_SIZE = 0.44;
@@ -41,16 +46,16 @@
     ob.length = 0;
 
     // пьедестал и сфера на нём — центр композиции
-    o.push(box([-1.5, 0, -1.5], [1.5, 1.0, 1.5], [0.40, 0.42, 0.48]));
+    o.push(box(0, 0.5, 0, 3.0, 1.0, 3.0, [0.40, 0.42, 0.48]));
     o.push(sphere(0, 2.15, 0, 1.15, [0.93, 0.66, 0.32]));
 
     // три ступени, уходящие вправо
-    o.push(box([1.9, 0, -1.1], [3.1, 0.45, 1.1], [0.34, 0.36, 0.42]));
-    o.push(box([3.3, 0, -1.1], [4.5, 0.90, 1.1], [0.30, 0.32, 0.38]));
-    o.push(box([4.7, 0, -1.1], [5.9, 1.35, 1.1], [0.26, 0.28, 0.34]));
+    o.push(box(2.5, 0.225, 0, 1.2, 0.45, 2.2, [0.34, 0.36, 0.42]));
+    o.push(box(3.9, 0.45, 0, 1.2, 0.90, 2.2, [0.30, 0.32, 0.38]));
+    o.push(box(5.3, 0.675, 0, 1.2, 1.35, 2.2, [0.26, 0.28, 0.34]));
 
-    // парящий куб: его границы пересобираются каждый кадр
-    this.floatBox = box([0, 0, 0], [0, 0, 0], [0.86, 0.74, 0.36]);
+    // парящий куб: его размеры пересобираются каждый кадр
+    this.floatBox = box(0, 0, 0, 0, 0, 0, [0.86, 0.74, 0.36]);
     o.push(this.floatBox);
 
     // обелиски-конусы по краям
@@ -77,8 +82,12 @@
   DemoScene.prototype.placeFloatBox = function (lift) {
     var b = this.floatBox;
     var s = FLOAT_SIZE;
-    b.min = [-s, lift, -s];
-    b.max = [s, lift + s * 2, s];
+    b.cx = 0;
+    b.cy = lift + s;
+    b.cz = 0;
+    b.hx = s;
+    b.hy = s;
+    b.hz = s;
   };
 
   // ---- каждый кадр: время, орбиты, парящий куб, солнце -------------------
