@@ -120,9 +120,14 @@
       this.setEdge(p.edge);
       this.edgeSet = this.edge;
     } else if (p.edge !== this.edgeSet) {
+      // сменили размер куба: меняется только геометрия — число тел остаётся прежним,
+      // само по себе ничего не появляется. Массив пересобирается ЦЕЛИКОМ: иначе в нём
+      // остаются сферы старой сетки впереди новых, и куб выглядит поломанным
       this.edgeSet = p.edge;
+      var keep = this.spawned;
       this.setEdge(p.edge);
-      this.setCount(this.total());
+      this.objects.length = 0;
+      this.setCount(Math.min(keep, this.total()));
     } else if (dt > 0 && p.rate > 0 && this.spawned < this.total()) {
       // иначе сцена растёт сама — старый способ смотреть, как движок держит наплыв
       this.acc += p.rate * dt;
