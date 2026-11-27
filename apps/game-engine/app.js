@@ -19,10 +19,12 @@
 
   // Ход кадра. dynamic — содержимое меняется: работает авто-масштаб (в движении разрешение
   // сбрасывается, чтобы держать частоту); up — содержимое застыло и мы поднимаем разрешение
-  // ступенями; static — картинка в полном разрешении и кадры не рисуются вообще.
+  // по цене прошлого кадра; static — картинка в полном разрешении и кадры не рисуются вообще.
   var mode = 'dynamic';
   var dynScale = 1;          // рабочий масштаб движения: к нему возвращаемся из статики
-  var upSteps = [];          // очередь промежуточных масштабов при подъёме к полному кадру
+  var warm = 0;              // сколько кадров после смены состояния не идёт в счёт авто-масштаба
+  var lastWork = 0;          // цена последнего кадра, мс: что дороже — процессор или видеоядро
+  var probeScale = 0;        // масштаб, к которому вернёмся, если проба не влезла (0 — пробы нет)
 
   var SCALE_MIN = 0.01;      // предел авто-масштаба: кадр в единицы пикселей
   var SCALE_MAX = 4;         // верхний предел: 4× — проверка за старое слабое устройство
@@ -78,7 +80,7 @@
     // размер кадра мог измениться, а разрешение в сверку содержимого не входит
     mode = 'dynamic';
     dynScale = renderer.pixelScale;
-    upSteps = [];
+    warm = 2;
     renderer.forceDraw();
   }
 
@@ -92,7 +94,9 @@
       'p95 ' + s.p95.toFixed(1) + ' · max ' + s.worst.toFixed(1) + '\n' +
       renderer.canvas.width + '×' + renderer.canvas.height + ' · ' +
       renderer.pixelScale.toFixed(2) + '× · ' + counts.total + ' prim\n' +
-      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + state;
+      'cpu ' + s.cpu.toFixed(2) + ' · gpu ' + gpu + ' · core ' + occ + state +
+      '\nwork ' + lastWork.toFixed(1) + ' ms · auto ' + (gfx.auto > 0.5 ? 'on' : 'off') +
+      (probeScale > 0 ? ' · probe back to ' + probeScale.toFixed(2) + '×' : '');
   }
 
   // ---- открыть сцену: свой набор объектов, своё окружение, своё положение камеры ----
@@ -113,7 +117,7 @@
     // новая сцена — снова динамика с выбранного масштаба
     mode = 'dynamic';
     dynScale = clampScale(gfx ? gfx.scale : 1);
-    upSteps = [];
+    warm = 2;
     renderer.forceDraw();
 
     panels.buildScene(def, settings, inst, null);
@@ -143,7 +147,7 @@
     uiAt = 0;
     mode = 'dynamic';
     dynScale = clampScale(gfx ? gfx.scale : 1);
-    upSteps = [];
+    warm = 2;
     renderer.forceDraw();
     panels.setStatus(active.inst.status ? active.inst.status(active.settings) : '');
     renderer.resize();
@@ -182,7 +186,9 @@
     hud.onReset(resetScene);
 
     var last = performance.now();
-    var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс
+    var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс (для панели)
+    var lastInt = 16.7;    // интервал прошлого нарисованного кадра, мс
+    var intScale = 1;      // на каком масштабе он был измерен
 
     // Полное разрешение для статичной картинки. При авто-масштабе это 1× (или выбранный
     // масштаб, если он больше); при выключенном авто масштаб ручной — его не трогаем.
@@ -191,47 +197,106 @@
       return Math.max(1, clampScale(gfx.scale));
     }
 
-    // Ступени от рабочего масштаба к полному: между динамикой и статикой проходит
-    // пара промежуточных кадров с промежуточным разрешением.
-    function planUpscale(from, to) {
-      var out = [];
-      if (!(from < to - 0.001)) return out;   // уже полное или даже больше — поднимать некуда
-
-      var s = from;
-      for (var i = 0; i < 4 && s < to - 0.001; i++) {
-        s = Math.min(to, s * 1.7);
-        out.push(s);
-      }
-      if (out[out.length - 1] < to - 0.001) out.push(to);
-      return out;
-    }
-
-    // Авто-масштаб работает только в динамике и считает по своим кадрам, а не по окну
-    // инструментов: в окно попадают статичные и промежуточные кадры, и по ним решение
-    // было бы неверным. Цель — держать кадр около 60 Гц, меняя разрешение множителем
-    // (шаг прибавлением не дойдёт от 4× до 0.01×).
+    // Авто-масштаб решает по интервалу между кадрами — и только по нему.
+    //
+    // Почему не по времени ядра: очередь сообщает о готовности кадра синхронно с показом,
+    // и любое измерение «от подачи до готовности» получает пол в один период экрана.
+    // На быстрой видеокарте лёгкий и средний кадр дают одно и то же число, по нему
+    // разрешение опускалось до предела (та самая история с 0.17×), а подъём — когда
+    // порог стоял ниже этого пола — не срабатывал никогда.
+    //
+    // Интервал же ограничен снизу обновлением экрана: уложился в него — интервал ровно
+    // один период, не уложился — сразу два. Эта ступенька и есть настоящий сигнал «влезает».
+    // Поэтому шаг вверх — ПРОБА: подняли масштаб, посмотрели следующий интервал; если
+    // промахнулись — возвращаемся и запоминаем, что выше этого масштаба лучше не лезть,
+    // пока не изменится нагрузка.
     var dynT = 0, dynSum = 0, dynN = 0;
+    var vsyncMs = 16.7;   // период обновления экрана: меньшее из виденных значений
+    var WORK_IDLE = 120;  // мс: сколько может стоить ОДИН статичный кадр в полном качестве
+    var probeAt = 0;      // масштаб до пробы (0 — пробы нет)
+    var blocked = 0;      // на этом масштабе уже не влезало: снова не пробуем
+    var blockedPrims = -1;
+    var downFrom = 0;     // масштаб до последнего шага вниз
+    var downAvg = 0;      // какой интервал заставил этот шаг сделать
+    var downBlocked = false;   // снижение больше не помогает — вниз не идём
+    var upCoolAt = 0;     // до этого времени подъём в статике не пробуем
 
-    function adapt(frameMs, dynamic) {
-      if (!(gfx.auto > 0.5) || !dynamic) {
+    function adapt(intervalMs, dynamic, prims) {
+      if (!(gfx.auto > 0.5) || !dynamic || !(intervalMs > 0)) {
         dynT = 0; dynSum = 0; dynN = 0;
         return;
       }
 
-      dynT += frameMs / 1000;
-      dynSum += frameMs;
+      // самый короткий интервал и есть период экрана; ниже 6 мс не опускаемся —
+      // туда попадают совпавшие метки времени, а не настоящие кадры
+      if (intervalMs < vsyncMs && intervalMs > 5) vsyncMs = intervalMs;
+
+      // первые кадры после смены состояния (возврат из статики, смена масштаба)
+      // длиннее обычных: новый размер полотна, новая текстура — их не считаем
+      if (warm > 0) { warm -= 1; return; }
+
+      // нагрузка сменилась — старый предел больше не указ
+      if (prims !== blockedPrims) {
+        blocked = 0; blockedPrims = prims;
+        downFrom = 0; downBlocked = false;
+      }
+
+      dynT += intervalMs / 1000;
+      dynSum += intervalMs;
       dynN += 1;
-      if (dynT < 0.5) return;
+      if (dynT < 0.4) return;
 
       var avg = dynSum / dynN;
       dynT = 0; dynSum = 0; dynN = 0;
 
+      var slow = vsyncMs * 1.2;   // кадр уже не помещается в обновление экрана
+      var fast = vsyncMs * 1.03;  // кадр уложился в обновление с запасом
+      // выше выбранного масштаба авто-масштаб не поднимается: ползунок — это потолок
+      // качества, а не только стартовая точка
+      var ceil = idleScale();
       var before = renderer.pixelScale;
-      if (avg > 21 && before > SCALE_MIN) renderer.pixelScale = Math.max(SCALE_MIN, before * 0.7);
-      else if (avg < 13.5 && before < SCALE_MAX) renderer.pixelScale = Math.min(SCALE_MAX, before * 1.2);
+
+      if (avg > slow) {
+        if (probeAt > 0) {
+          // проба не влезла: назад, и выше этого масштаба не лезем
+          blocked = before;
+          blockedPrims = prims;
+          renderer.pixelScale = probeAt;
+          probeAt = 0;
+        } else if (before > SCALE_MIN && !downBlocked) {
+          if (downFrom > 0 && avg > downAvg * 0.85) {
+            // прошлый шаг вниз на 30% не дал даже 15% выигрыша — значит дело не в
+            // разрешении (столько стоит сам кадр). Возвращаем картинку покрупнее
+            // и вниз больше не идём, пока не сменится нагрузка
+            renderer.pixelScale = downFrom;
+            downFrom = 0;
+            downBlocked = true;
+          } else {
+            // просто тяжело: снижаем сразу настолько, насколько перегружены — цена
+            // кадра растёт как площадь, поэтому √(цель/сейчас) и есть нужное отношение.
+            // Шаг не более ×0.4 за раз: иначе случайный тяжёлый кадр уронит картинку
+            var fit = Math.sqrt(vsyncMs / avg) * 0.9;
+            downFrom = before;
+            downAvg = avg;
+            renderer.pixelScale = Math.max(SCALE_MIN, before * Math.max(fit, 0.4));
+            blocked = 0;
+          }
+        }
+      } else if (avg <= fast && before < ceil - 0.001) {
+        var next = Math.min(ceil, before * 1.25);
+        if (!(blocked > 0 && next >= blocked * 0.98)) {
+          probeAt = before;   // вернёмся сюда, если не влезет
+          renderer.pixelScale = next;
+        }
+      } else {
+        downFrom = 0;   // влезло — история шага вниз больше не нужна
+      }
+
       if (renderer.pixelScale !== before) {
         dynScale = renderer.pixelScale;
+        probeScale = probeAt;
         renderer.resize();
+        warm = 2;   // кадр с новым размером полотна в счёт не идёт
       }
     }
 
@@ -268,23 +333,41 @@
         if (mode !== 'dynamic') {
           // содержимое снова меняется: назад к рабочему масштабу движения
           mode = 'dynamic';
-          upSteps = [];
+          warm = 2;
           perf.reset();   // замеры заново, без промежуточных и статичных кадров
           if (renderer.pixelScale !== dynScale) { renderer.pixelScale = dynScale; renderer.resize(); }
         }
       } else if (mode === 'dynamic') {
-        // содержимое застыло: запоминаем рабочий масштаб и поднимаем разрешение
-        // ступенями — пара промежуточных кадров, затем полный кадр и тишина
+        // содержимое застыло: запоминаем рабочий масштаб движения и начинаем подъём
         dynScale = renderer.pixelScale;
-        upSteps = planUpscale(dynScale, idleScale());
-        mode = upSteps.length ? 'up' : 'static';
+        mode = performance.now() < upCoolAt ? 'static' : 'up';
       }
 
+      // Подъём в статике: шаг берётся по цене прошлого кадра — растёт она как площадь
+      // кадра, поэтому шаг = корень из отношения бюджета к цене (с запасом 0.9), но не
+      // больше ×1.7 за кадр. Ступень, которая не влезает в бюджет одного статичного кадра,
+      // не рисуется вовсе: иначе на слабом телефоне один такой кадр подвесил бы систему.
       if (mode === 'up') {
-        renderer.pixelScale = upSteps.shift();
-        renderer.resize();
-        draw = true;
-        if (!upSteps.length) mode = 'static';
+        var from = renderer.pixelScale;
+        var ceil = idleScale();
+        // цена кадра на текущем масштабе: замер мог быть сделан на другом
+        var nowCost = lastInt * (from * from) / (intScale * intScale || 1);
+        var grow = Math.sqrt(WORK_IDLE / Math.max(nowCost, 1)) * 0.9;
+        var next = Math.min(ceil, from * Math.min(grow, 1.7));
+        if (!(grow > 1.05) || !(next > from * 1.001)) {
+          // картинка замирает там, где уже есть; с повтором подождём пять секунд —
+          // иначе при каждом стоке была бы лишняя тяжёлая работа
+          mode = 'static';
+          upCoolAt = performance.now() + 5000;
+        } else {
+          renderer.pixelScale = next;
+          renderer.resize();
+          // значения кадра пишутся до смены размера, поэтому разрешение в них осталось
+          // старым, а шейдер считает по нему аспект и размер пикселя — поправляем
+          renderer.syncSize();
+          draw = true;
+          if (!(next < ceil - 0.01)) mode = 'static';   // дошли до потолка качества
+        }
       }
 
       if (draw) {
@@ -295,8 +378,11 @@
 
       // статистика: интервал между кадрами, занятость процессора, время GPU.
       // Не рисовали — пишем нулевую занятость ядра, чтобы это было видно в панели.
+      var cpuMs = performance.now() - t0;
+      lastWork = Math.max(cpuMs, lastBusy);
+      if (draw) { lastInt = rawMs; intScale = renderer.pixelScale; }
       if (document.visibilityState !== 'hidden') {
-        perf.push(rawMs, performance.now() - t0, draw ? renderer.gpuMs() : null,
+        perf.push(rawMs, cpuMs, draw ? renderer.gpuMs() : null,
           counts.total, renderer.canvas.width * renderer.canvas.height,
           draw ? lastBusy : 0, draw ? 1 : 0);
       }
@@ -313,7 +399,7 @@
         hud.setDebug(gfx.debug > 0.5 ? debugText(counts) : '');
       }
 
-      adapt(rawMs, changed);
+      adapt(rawMs, changed, counts.total);
       return draw;
     }
 

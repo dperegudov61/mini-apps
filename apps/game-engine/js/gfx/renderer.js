@@ -7,7 +7,7 @@
   var PARAMS_FLOATS = 48;   // 48 × f32 = 192 Б, см. shaders/params.wgsl
   var PARAMS_TIME = 3;      // индекс игрового времени в значениях кадра (см. pack.js)
   var PRIM_FLOATS = 12;     // примитив = 3 vec4f = 48 Б, см. shaders/primitives.wgsl
-  var MAX_PRIMS = 4096;     // потолок буфера примитивов: 192 КБ, хватает кубу сфер 16³
+  var MAX_PRIMS = 17576;    // потолок буфера примитивов: 824 КБ, куб сфер 26³ (17576)
 
   function Renderer(gpu, canvas) {
     this.gpu = gpu;
@@ -229,6 +229,14 @@
     this.lastCount = this.primCount;
     if (this.primCount > 0) this.lastPrims.set(this.primData.subarray(0, this.primCount * PRIM_FLOATS));
     return true;
+  };
+
+  // размер полотна в значениях кадра. Масштаб меняется уже после упаковки кадра,
+  // а шейдер по этому значению считает аспект и размер пикселя — без поправки
+  // промежуточный кадр подъёма шёл бы с пропорциями прошлого разрешения
+  Renderer.prototype.syncSize = function () {
+    this.params[0] = this.canvas.width || 1;
+    this.params[1] = this.canvas.height || 1;
   };
 
   // значения и примитивы уходят на GPU вместе: сцена меняется между кадрами

@@ -11,8 +11,8 @@ game-engine.scene	Scene	Сцена
 game-engine.sceneNote	a scene brings its own objects, environment and camera	сцена приносит свои объекты, окружение и камеру
 game-engine.sceneDemo	test bench	стенд
 game-engine.sceneDemoNote	pedestal, steps, obelisks and orbiting spheres over a grid floor	пьедестал, ступени, обелиски и сферы на орбитах над землёй-сеткой
-game-engine.sceneBench	sphere cube 16×16×16	куб сфер 16×16×16
-game-engine.sceneBenchNote	the exact number of spheres in a 16×16×16 cube — a load and stability test	точное число сфер в кубе 16×16×16 — проверка нагрузки и стабильности
+game-engine.sceneBench	sphere cube 26×26×26	куб сфер 26×26×26
+game-engine.sceneBenchNote	the exact number of spheres in a 26×26×26 cube — a load and stability test	точное число сфер в кубе 26×26×26 — проверка нагрузки и стабильности
 game-engine.benchRate	spheres per second	сфер в секунду
 game-engine.benchCount	objects	объектов
 game-engine.benchFill	fill now	заполнить сразу

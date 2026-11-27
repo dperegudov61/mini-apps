@@ -1,13 +1,13 @@
 /* bench.js — сцена-бенчмарк для проверки движка и сбора данных о стабильности.
-   Куб 16×16×16 сфер; ползунок «объектов» задаёт ТОЧНОЕ число тел (0…4096), поэтому
+   Куб 26×26×26 сфер; ползунок «объектов» задаёт ТОЧНОЕ число тел (0…17576), поэтому
    зависимость «сколько тел → сколько мс» видна прямо на графике: подвинули ползунок —
    линия времени кадра встала на новую высоту. Ползунок «сфер в секунду» (> 0) заставляет
    сцену расти самой — старый способ смотреть, как движок держит наплыв. */
 (function (GE) {
   'use strict';
 
-  var N = 16;                 // сфер по ребру куба
-  var TOTAL = N * N * N;      // 4096
+  var N = 26;                 // сфер по ребру куба
+  var TOTAL = N * N * N;      // 17576
   var SPACING = 1;            // шаг сетки, метры
   var RADIUS = 0.30;          // радиус сферы, метры
 
@@ -78,7 +78,7 @@
     }
   };
 
-  // кнопка сцены: поставить все 4096 сразу, не ожидая ползунка
+  // кнопка сцены: поставить все сферы сразу, не ожидая ползунка
   BenchScene.prototype.fillAll = function (settings) {
     this.setCount(TOTAL);
     this.countSet = TOTAL;
@@ -120,10 +120,10 @@
   GE.Scenes.define({
     id: 'bench',
     label: 'game-engine.sceneBench',
-    fb: 'sphere cube 16×16×16',
+    fb: 'sphere cube 26×26×26',
     note: 'game-engine.sceneBenchNote',
-    noteFb: 'the exact number of spheres in a 16×16×16 cube — a load and stability test',
-    camera: { target: [0, 8, 0], yaw: 0.9, pitch: 0.38, distance: 32 },
+    noteFb: 'the exact number of spheres in a 26×26×26 cube — a load and stability test',
+    camera: { target: [0, 13, 0], yaw: 0.9, pitch: 0.38, distance: 52 },
     params: [
       GE.SceneParts.count(0, TOTAL),
       GE.SceneParts.rate(0),
