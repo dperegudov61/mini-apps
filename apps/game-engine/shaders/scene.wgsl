@@ -242,7 +242,11 @@ fn groundColor(p : vec3f, dist : f32) -> vec3f {
 
 fn shadeSurface(n : vec3f, albedo : vec3f, rd : vec3f, sun : vec3f,
                 ndl0 : f32, spec0 : f32, shadow : f32) -> vec3f {
-  let ambient = P.skyAmbient.rgb * (0.5 + 0.5 * n.y);
+  // скайбокс-свет: сверху — небо, снизу — его отскок от земли.
+  // Без нижнего света поверхность с нормалью вниз (потолок, низ куба) получала
+  // ровно ноль и выглядела чёрной, будто провал в небе.
+  let ambK = max(0.5 + 0.5 * n.y, 0.30 * (0.5 - 0.5 * n.y));
+  let ambient = P.skyAmbient.rgb * ambK;
   let lit = shadow * P.frame2.x;                // «день для поверхности» с процессора
 
   var col = albedo * (ambient + sun * saturate(ndl0) * lit);

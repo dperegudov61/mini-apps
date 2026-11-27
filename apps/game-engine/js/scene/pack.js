@@ -95,6 +95,7 @@
     } else if (k === 'plane') {
       d[o + 4] = obj.px; d[o + 5] = obj.py; d[o + 6] = obj.pz;
       d[o + 8] = obj.nx; d[o + 9] = obj.ny; d[o + 10] = obj.nz;
+      d[o + 20] = obj.radius || 0;      // e.x: 0 — бесконечная плоскость
     } else if (k === 'rect') {
       d[o + 4] = obj.cx; d[o + 5] = obj.cy; d[o + 6] = obj.cz;
       var u = obj.u, v = obj.v;

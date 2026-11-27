@@ -120,11 +120,13 @@
       }, opts);
     },
 
-    // бесконечная плоскость через точку p с нормалью n (видна только со стороны n)
+    // плоскость через точку p с нормалью n (видна только со стороны n).
+    // opts.radius ограничивает её кругом этого радиуса (0 или нет — бесконечная).
     plane: function (p, n, color, opts) {
+      var q = opts || {};
       return this._opts({
         kind: 'plane', px: p[0], py: p[1], pz: p[2],
-        nx: n[0], ny: n[1], nz: n[2], color: color
+        nx: n[0], ny: n[1], nz: n[2], radius: q.radius || 0, color: color
       }, opts);
     },
 

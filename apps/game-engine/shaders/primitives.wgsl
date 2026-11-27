@@ -14,7 +14,7 @@
 //   тор:      a = (центр.xyz, 0), b = (R, r, 0, 0),        c = нормаль плоскости кольца
 //   конус:    a = (A.xyz, rA), b = (B.xyz, rB), c = (n1.xyz, d1), d = (n2.xyz, d2)  — две наклонные режущие плоскости
 //   цилиндр:  то же, что конус (rA = rB = r)
-//   плоскость:a = (точка.xyz, 0), b = (нормаль.xyz, 0)
+//   плоскость:a = (точка.xyz, 0), b = (нормаль.xyz, 0), e.x = радиус (0 — бесконечная)
 //   прямоуг.: a = (центр.xyz, 0), b = (базис U.xyz, 0), c = (базис V.xyz, 0), d = (полуW, полуH, 0, 0)
 //   треугол.: a = (v0.xyz, 0), b = (v1.xyz, 0), c = (v2.xyz, 0)
 //
@@ -98,6 +98,13 @@ var<private> s_top : i32;
 var<private> q_roots : array<f32, 4>;
 var<private> q_tmp : array<f32, 4>;
 var<private> q_n : i32;
+
+// коэффициенты последней квартики (для уточнения корней по Ньютону, см. quarticPolish)
+var<private> qa4 : f32;
+var<private> qa3 : f32;
+var<private> qa2 : f32;
+var<private> qa1 : f32;
+var<private> qa0 : f32;
 
 fn setIv(base : i32, k : i32, t0 : f32, t1 : f32, n0 : vec3f, n1 : vec3f, albedo : vec4f) {
   let i = base + k;
@@ -305,16 +312,25 @@ fn torusIntervals(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
   let ol = vec3f(dot(o, u), dot(o, v), dot(o, n));
   let dl = vec3f(dot(rd, u), dot(rd, v), dot(rd, n));
 
+  let dd = dot(dl, dl);
+
+  // Начало луча переносим в точку, ближайшую к центру тора, и решаем квартику
+  // в переменной u = t - tc. Без переноса коэффициенты — порядка расстояния
+  // до камеры в четвёртой степени (20 м → ~2·10⁵), и в f32 корни «плывут»
+  // на десятки сантиметров: на торе это видно как шум на поверхности и рваный силуэт.
+  // Перенос — это точная замена переменной, картинку он не меняет, только точность.
+  let tc = -dot(ol, dl) / max(dd, 1e-8);
+  let ol2 = ol + dl * tc;
+
   let G = R * R - r * r;
   let R2 = R * R;
-  let oo = dot(ol, ol);
-  let od = dot(ol, dl);
-  let dd = dot(dl, dl);
+  let oo = dot(ol2, ol2);
+  let od = dot(ol2, dl);
   let A = oo + G;
   let B = 2.0 * od;
   let C = dd;
-  let Q0 = ol.x * ol.x + ol.y * ol.y;
-  let Q1 = 2.0 * (ol.x * dl.x + ol.y * dl.y);
+  let Q0 = ol2.x * ol2.x + ol2.y * ol2.y;
+  let Q1 = 2.0 * (ol2.x * dl.x + ol2.y * dl.y);
   let Q2 = dl.x * dl.x + dl.y * dl.y;
 
   let a4 = C * C;
@@ -323,19 +339,42 @@ fn torusIntervals(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
   let a1 = 2.0 * A * B - 4.0 * R2 * Q1;
   let a0 = A * A - 4.0 * R2 * Q0;
 
+  qa4 = a4; qa3 = a3; qa2 = a2; qa1 = a1; qa0 = a0;
+
   let cnt = solveQuartic(a4, a3, a2, a1, a0);
   var m = 0;
   var k = 0;
   while (k + 1 < cnt && m < INT_MAX) {
-    let t0 = q_roots[k];
-    let t1 = q_roots[k + 1];
-    let n0 = torusNormal(ol + dl * t0, G, R2, u, v, n, inv);
-    let n1 = torusNormal(ol + dl * t1, G, R2, u, v, n, inv);
-    setIv(base, m, t0, t1, n0, n1, alb);
-    m = m + 1;
+    var u0 = quarticPolish(q_roots[k]);
+    var u1 = quarticPolish(q_roots[k + 1]);
+    if (u0 > u1) { let sw = u0; u0 = u1; u1 = sw; }
+    let t0 = u0 + tc;
+    let t1 = u1 + tc;
+    if (t1 > 0.0) {
+      let n0 = torusNormal(ol2 + dl * u0, G, R2, u, v, n, inv);
+      let n1 = torusNormal(ol2 + dl * u1, G, R2, u, v, n, inv);
+      setIv(base, m, t0, t1, n0, n1, alb);
+      m = m + 1;
+    }
     k = k + 2;
   }
   return m;
+}
+
+// Два шага Ньютона по квартике (уже в перенесённой переменной u): снимает остаток
+// ошибки у силуэта, где два корня почти совпадают. Шаг больше радиуса трубки —
+// это уже соседний корень, такой шаг не принимаем (как и NaN).
+fn quarticPolish(x : f32) -> f32 {
+  var u = x;
+  for (var i = 0; i < 2; i = i + 1) {
+    let v = ((((qa4 * u + qa3) * u + qa2) * u + qa1) * u) + qa0;
+    let w = (((4.0 * qa4 * u + 3.0 * qa3) * u + 2.0 * qa2) * u) + qa1;
+    if (abs(w) < 1e-9) { break; }
+    let step = v / w;
+    if (!(abs(step) < 0.25)) { break; }
+    u = u - step;
+  }
+  return u;
 }
 
 // ---------------- конус / цилиндр, усечённые двумя наклонными плоскостями ----------------
@@ -475,6 +514,16 @@ fn planeInterval(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
   if (abs(den) < 1e-7) { return 0; }
   let t = dot(p0 - ro, n) / den;
   if (t <= 0.0) { return 0; }
+
+  // e.x — ограничение радиуса: 0 значит бесконечная плоскость, иначе — круг
+  // заданного радиуса вокруг точки p0. Бесконечная плоскость над камерой
+  // закрывает собой всё небо, поэтому в витрине она ограничена.
+  let rad = p.e.x;
+  if (rad > 0.0) {
+    let q = ro + rd * t - p0;
+    if (dot(q, q) > rad * rad) { return 0; }
+  }
+
   var nn = n;
   if (inv > 0.5) { nn = -nn; }
   setIv(base, 0, t, t, nn, nn, alb);
