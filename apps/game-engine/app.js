@@ -210,6 +210,30 @@
     hud.onPause(function (value) { paused = value; });
     hud.onReset(resetScene);
 
+    // «Сбросить кэш» вместо Ctrl+F5: чистим Cache Storage и Service Worker, затем
+    // открываем ту же страницу по новому адресу — браузер не возьмёт старые файлы
+    // из своего кэша. Настройки сцены (localStorage) при этом не трогаются.
+    var btnCache = document.getElementById('btn-cache');
+    if (btnCache) {
+      btnCache.addEventListener('click', function () {
+        btnCache.disabled = true;
+        var jobs = [];
+        if (window.caches && caches.keys) {
+          jobs.push(caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (list) {
+            return Promise.all(list.map(function (reg) { return reg.unregister(); }));
+          }));
+        }
+        Promise.all(jobs).catch(function () {}).then(function () {
+          location.replace(location.pathname + '?v=' + Date.now());
+        });
+      });
+    }
+
     var last = performance.now();
     var lastBusy = 0;      // сколько последний кадр занимал видеоядро, мс (для панели)
     var lastInt = 16.7;    // интервал прошлого нарисованного кадра, мс

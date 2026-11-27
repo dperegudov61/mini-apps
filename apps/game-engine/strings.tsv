@@ -66,6 +66,7 @@ game-engine.hintKeys	move the target, arrows rotate the view	двигают це
 game-engine.pause	Pause	Пауза
 game-engine.resume	Resume	Продолжить
 game-engine.reset	Reset	Сброс
+game-engine.cache	Reset cache	Сбросить кэш
 game-engine.note	Sun height sweeps day into night: shadows, sky and stars follow it.	Высота солнца ведёт день в ночь: за ней идут тени, небо и звёзды.
 game-engine.gpuAsking	asking for an adapter…	запрос адаптера…
 game-engine.failTitle	the engine did not start	движок не запустился
