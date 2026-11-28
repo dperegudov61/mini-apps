@@ -1,9 +1,9 @@
 // primitives.wgsl — примитивы сцены: раскладка буфера, пересечения, нормали,
-// булевы операции (CSG) над твёрдыми телами и поверхности (плоскость, прямоугольник,
-// треугольник) как отдельные листы.
+// булевы операции (CSG) над твёрдыми телами и поверхности (плоскость,
+// прямоугольник) как отдельные листы.
 //
 // Раскладка буфера (заполняет js/scene/pack.js → GE.packScene): один примитив = 8 vec4 = 32 float = 128 Б.
-//   m : vec4f   x = вид (1 сфера, 2 куб, 3 тор, 4 конус, 5 цилиндр, 6 плоскость, 7 прямоугольник, 8 треугольник, 9 сетка),
+//   m : vec4f   x = вид (1 сфера, 2 куб, 3 конус, 4 цилиндр, 5 плоскость, 6 прямоугольник, 7 сетка),
 //               y = вывернуть (0/1), z = двусторонний (0/1), w = matId (задел под карту нормалей, 0 — нет)
 //   a..f : vec4f — геометрия вида (см. ниже)
 //   g : vec4f   rgb = цвет, a = зарезервировано
@@ -11,18 +11,16 @@
 // Геометрия по видам:
 //   сфера:    a = (центр.xyz, r)
 //   куб:      a = (центр.xyz, 0), b = (полуразмеры.xyz, 0), c = базис X, d = базис Y (Z = X × Y)
-//   тор:      a = (центр.xyz, 0), b = (R, r, 0, 0),        c = нормаль плоскости кольца
 //   конус:    a = (A.xyz, rA), b = (B.xyz, rB), c = (n1.xyz, d1), d = (n2.xyz, d2)  — две наклонные режущие плоскости
 //   цилиндр:  то же, что конус (rA = rB = r)
 //   плоскость:a = (точка.xyz, 0), b = (нормаль.xyz, 0), e.x = радиус (0 — бесконечная)
 //   прямоуг.: a = (центр.xyz, 0), b = (базис U.xyz, 0), c = (базис V.xyz, 0), d = (полуW, полуH, 0, 0)
-//   треугол.: a = (v0.xyz, 0), b = (v1.xyz, 0), c = (v2.xyz, 0)
 //   сетка:    a = (смещение треугольников, число, смещение узлов BVH, число узлов) — в float'ах буфера meshBuf
 //             b = (bmin.xyz модели, масштаб), c = (bmax.xyz, 0),
 //             d/e/f = (оси поворота X/Y/Z, сдвиг по этой оси в w); см. js/scene/mesh.js
 //             Поворот и сдвиг применяются к лучу, а не к вершинам: модель можно крутить
 //             без пересылки буфера. Масштаб равномерный.
-//             Сетка — тоже лист, как треугольник: булевы операции над её объёмом не считаются.
+//             Сетка — тоже лист, как плоскость: булевы операции над её объёмом не считаются.
 //
 // Плоскости конуса/цилиндра заданы уравнением dot(n, x) + d <= 0 (внутри тела).
 // Правило видимости: грань видна, только если нормаль смотрит на луч (dot(n, rd) < 0);
@@ -52,13 +50,11 @@ const PI : f32 = 3.141592653589793;
 // виды примитивов (в m.x)
 const K_SPHERE : f32 = 1.0;
 const K_BOX    : f32 = 2.0;
-const K_TORUS  : f32 = 3.0;
-const K_CONE   : f32 = 4.0;
-const K_CYL    : f32 = 5.0;
-const K_PLANE  : f32 = 6.0;
-const K_RECT   : f32 = 7.0;
-const K_TRI    : f32 = 8.0;
-const K_MESH   : f32 = 9.0;
+const K_CONE   : f32 = 3.0;
+const K_CYL    : f32 = 4.0;
+const K_PLANE  : f32 = 5.0;
+const K_RECT   : f32 = 6.0;
+const K_MESH   : f32 = 7.0;
 
 // коды операций CSG-программы (в буфере csg, два u32 на инструкцию: код, операнд)
 const OP_LEAF : u32 = 0u;
@@ -80,7 +76,7 @@ fn miss() -> Hit {
 // ------------------------------------------------------------
 // ИНТЕРВАЛЫ: твёрдое тело вдоль луча — набор отрезков [t0, t1] (внутри тела).
 // Для каждого отрезка храним нормали входа (t0) и выхода (t1) и цвет (albedo.w — двусторонность).
-// Поверхности (плоскость, прямоугольник, треугольник) — вырожденный отрезок [t, t].
+// Поверхности (плоскость, прямоугольник) — вырожденный отрезок [t, t].
 // ------------------------------------------------------------
 
 struct Interval {
@@ -91,7 +87,7 @@ struct Interval {
   albedo : vec4f, // rgb — цвет, w — двусторонность (0/1)
 };
 
-const INT_MAX = 4;     // интервалов в одном списке (тор — 2, вычитание может удвоить)
+const INT_MAX = 4;     // интервалов в одном списке (вычитание может удвоить)
 const STACK_MAX = 4;   // глубина стека CSG
 const CAP = 16;        // INT_MAX * STACK_MAX
 
@@ -102,18 +98,6 @@ var<private> s_n1 : array<vec3f, CAP>;
 var<private> s_al : array<vec4f, CAP>;
 var<private> s_cnt : array<i32, STACK_MAX>;
 var<private> s_top : i32;
-
-// рабочие массивы решателя квартики
-var<private> q_roots : array<f32, 4>;
-var<private> q_tmp : array<f32, 4>;
-var<private> q_n : i32;
-
-// коэффициенты последней квартики (для уточнения корней по Ньютону, см. quarticPolish)
-var<private> qa4 : f32;
-var<private> qa3 : f32;
-var<private> qa2 : f32;
-var<private> qa1 : f32;
-var<private> qa0 : f32;
 
 fn setIv(base : i32, k : i32, t0 : f32, t1 : f32, n0 : vec3f, n1 : vec3f, albedo : vec4f) {
   let i = base + k;
@@ -193,208 +177,6 @@ fn boxIntervals(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
   if (inv > 0.5) { n0 = -n0; n1 = -n1; }
   setIv(base, 0, tmin, tmax, n0, n1, alb);
   return 1;
-}
-
-// ---------------- тор (решатель квартики) ----------------
-
-fn cbrt(x : f32) -> f32 {
-  return sign(x) * pow(abs(x), 1.0 / 3.0);
-}
-
-fn cubicRoots(a : f32, b : f32, c : f32, d : f32) -> i32 {
-  if (abs(a) < 1e-12) {
-    if (abs(b) < 1e-12) {
-      if (abs(c) < 1e-12) { return 0; }
-      q_tmp[0] = -d / c;
-      return 1;
-    }
-    let disc = c * c - 4.0 * b * d;
-    if (disc < 0.0) { return 0; }
-    let s = sqrt(disc);
-    q_tmp[0] = (-c + s) / (2.0 * b);
-    if (disc > 1e-12) { q_tmp[1] = (-c - s) / (2.0 * b); return 2; }
-    return 1;
-  }
-  let p = (3.0 * a * c - b * b) / (3.0 * a * a);
-  let q = (2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d) / (27.0 * a * a * a);
-  let disc = q * q / 4.0 + p * p * p / 27.0;
-  let shift = -b / (3.0 * a);
-  if (disc >= 0.0) {
-    let s = sqrt(max(disc, 0.0));
-    q_tmp[0] = cbrt(-q / 2.0 + s) + cbrt(-q / 2.0 - s) + shift;
-    return 1;
-  }
-  let rr = 2.0 * sqrt(-p / 3.0);
-  let phi = acos(clamp((3.0 * q) / (2.0 * p) * sqrt(-3.0 / p), -1.0, 1.0));
-  q_tmp[0] = rr * cos(phi / 3.0) + shift;
-  q_tmp[1] = rr * cos((phi + 2.0 * PI) / 3.0) + shift;
-  q_tmp[2] = rr * cos((phi + 4.0 * PI) / 3.0) + shift;
-  return 3;
-}
-
-fn addQuadRoots(b1 : f32, c1 : f32, shift : f32) {
-  let disc = b1 * b1 - 4.0 * c1;
-  if (disc < 0.0) { return; }
-  let s = sqrt(disc);
-  q_roots[q_n] = (-b1 + s) * 0.5 + shift;
-  q_n = q_n + 1;
-  if (disc > 1e-12) {
-    q_roots[q_n] = (-b1 - s) * 0.5 + shift;
-    q_n = q_n + 1;
-  }
-}
-
-fn sort4(n : i32) {
-  for (var i = 1; i < n; i = i + 1) {
-    let key = q_roots[i];
-    var j = i - 1;
-    while (j >= 0 && q_roots[j] > key) {
-      q_roots[j + 1] = q_roots[j];
-      j = j - 1;
-    }
-    q_roots[j + 1] = key;
-  }
-}
-
-// a x^4 + b x^3 + c x^2 + d x + e = 0 → q_roots (по возрастанию), возвращает число корней
-fn solveQuartic(a : f32, b : f32, c : f32, d : f32, e : f32) -> i32 {
-  q_n = 0;
-  if (abs(a) < 1e-12) {
-    let n = cubicRoots(b, c, d, e);
-    for (var i = 0; i < n; i = i + 1) { q_roots[i] = q_tmp[i]; }
-    sort4(n);
-    return n;
-  }
-  let B = b / a;
-  let C = c / a;
-  let D = d / a;
-  let E = e / a;
-  let p = C - 3.0 * B * B / 8.0;
-  let q = B * B * B / 8.0 - B * C / 2.0 + D;
-  let r = -3.0 * B * B * B * B / 256.0 + C * B * B / 16.0 - B * D / 4.0 + E;
-
-  // резольвента: 2 m^3 - p m^2 - 2 r m + (p r - q^2/4) = 0
-  let rn = cubicRoots(2.0, -p, -2.0 * r, p * r - q * q / 4.0);
-  for (var i = 0; i < rn; i = i + 1) {
-    let m = q_tmp[i];
-    let a2 = 2.0 * m - p;
-    if (a2 <= 1e-9) { continue; }
-    let Aq = sqrt(a2);
-    let Bm = -q / (2.0 * Aq);
-    let shift = -B / 4.0;
-    addQuadRoots(Aq, m + Bm, shift);
-    addQuadRoots(-Aq, m - Bm, shift);
-    break;
-  }
-  sort4(q_n);
-  return q_n;
-}
-
-fn torusNormal(pt : vec3f, G : f32, R2 : f32, u : vec3f, v : vec3f, n : vec3f, inv : f32) -> vec3f {
-  let S = dot(pt, pt);
-  let gl = vec3f(
-    4.0 * pt.x * (S + G - 2.0 * R2),
-    4.0 * pt.y * (S + G - 2.0 * R2),
-    4.0 * pt.z * (S + G));
-  let len = length(gl);
-  var gw = vec3f(0.0, 1.0, 0.0);
-  if (len > 1e-6) { gw = gl / len; }
-  let w = u * gw.x + v * gw.y + n * gw.z;
-  return select(w, -w, inv > 0.5);
-}
-
-fn torusIntervals(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
-  let p = prims[pid];
-  let c = p.a.xyz;
-  let R = p.b.x;
-  let r = p.b.y;
-  let n = p.c.xyz;
-  let inv = p.m.y;
-  let alb = vec4f(p.g.rgb, p.m.z);
-
-  var w = vec3f(0.0, 1.0, 0.0);
-  if (abs(n.y) > 0.9) { w = vec3f(1.0, 0.0, 0.0); }
-
-  // Ранний выход по описанной сфере (центр, R + r). Тор занимает на экране проценты,
-  // а без этой проверки квартику пришлось бы решать на КАЖДОМ пикселе кадра
-  // (так и было: замер в витрине при 1024x576 — 22.1 мс с тором против 17.5 без него).
-  let bs = R + r;
-  let oc = ro - c;
-  let oc2 = dot(oc, oc) - bs * bs;
-  let ocd = dot(oc, rd);
-  if (ocd * ocd - oc2 < 0.0) { return 0; }        // луч проходит мимо сферы
-  if (oc2 > 0.0 && ocd > 0.0) { return 0; }       // сфера целиком позади луча
-
-  let u = normalize(cross(w, n));
-  let v = cross(n, u);
-
-  let o = ro - c;
-  let ol = vec3f(dot(o, u), dot(o, v), dot(o, n));
-  let dl = vec3f(dot(rd, u), dot(rd, v), dot(rd, n));
-
-  let dd = dot(dl, dl);
-
-  // Начало луча переносим в точку, ближайшую к центру тора, и решаем квартику
-  // в переменной u = t - tc. Без переноса коэффициенты — порядка расстояния
-  // до камеры в четвёртой степени (20 м → ~2·10⁵), и в f32 корни «плывут»
-  // на десятки сантиметров: на торе это видно как шум на поверхности и рваный силуэт.
-  // Перенос — это точная замена переменной, картинку он не меняет, только точность.
-  let tc = -dot(ol, dl) / max(dd, 1e-8);
-  let ol2 = ol + dl * tc;
-
-  let G = R * R - r * r;
-  let R2 = R * R;
-  let oo = dot(ol2, ol2);
-  let od = dot(ol2, dl);
-  let A = oo + G;
-  let B = 2.0 * od;
-  let C = dd;
-  let Q0 = ol2.x * ol2.x + ol2.y * ol2.y;
-  let Q1 = 2.0 * (ol2.x * dl.x + ol2.y * dl.y);
-  let Q2 = dl.x * dl.x + dl.y * dl.y;
-
-  let a4 = C * C;
-  let a3 = 2.0 * B * C;
-  let a2 = B * B + 2.0 * A * C - 4.0 * R2 * Q2;
-  let a1 = 2.0 * A * B - 4.0 * R2 * Q1;
-  let a0 = A * A - 4.0 * R2 * Q0;
-
-  qa4 = a4; qa3 = a3; qa2 = a2; qa1 = a1; qa0 = a0;
-
-  let cnt = solveQuartic(a4, a3, a2, a1, a0);
-  var m = 0;
-  var k = 0;
-  while (k + 1 < cnt && m < INT_MAX) {
-    var u0 = quarticPolish(q_roots[k]);
-    var u1 = quarticPolish(q_roots[k + 1]);
-    if (u0 > u1) { let sw = u0; u0 = u1; u1 = sw; }
-    let t0 = u0 + tc;
-    let t1 = u1 + tc;
-    if (t1 > 0.0) {
-      let n0 = torusNormal(ol2 + dl * u0, G, R2, u, v, n, inv);
-      let n1 = torusNormal(ol2 + dl * u1, G, R2, u, v, n, inv);
-      setIv(base, m, t0, t1, n0, n1, alb);
-      m = m + 1;
-    }
-    k = k + 2;
-  }
-  return m;
-}
-
-// Два шага Ньютона по квартике (уже в перенесённой переменной u): снимает остаток
-// ошибки у силуэта, где два корня почти совпадают. Шаг больше радиуса трубки —
-// это уже соседний корень, такой шаг не принимаем (как и NaN).
-fn quarticPolish(x : f32) -> f32 {
-  var u = x;
-  for (var i = 0; i < 2; i = i + 1) {
-    let v = ((((qa4 * u + qa3) * u + qa2) * u + qa1) * u) + qa0;
-    let w = (((4.0 * qa4 * u + 3.0 * qa3) * u + 2.0 * qa2) * u) + qa1;
-    if (abs(w) < 1e-9) { break; }
-    let step = v / w;
-    if (!(abs(step) < 0.25)) { break; }
-    u = u - step;
-  }
-  return u;
 }
 
 // ---------------- конус / цилиндр, усечённые двумя наклонными плоскостями ----------------
@@ -577,34 +359,6 @@ fn rectInterval(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
   return 0;
 }
 
-fn triInterval(pid : u32, ro : vec3f, rd : vec3f, base : i32) -> i32 {
-  let p = prims[pid];
-  let v0 = p.a.xyz;
-  let v1 = p.b.xyz;
-  let v2 = p.c.xyz;
-  let inv = p.m.y;
-  let alb = vec4f(p.g.rgb, p.m.z);
-  let e1 = v1 - v0;
-  let e2 = v2 - v0;
-  let h = cross(rd, e2);
-  let a = dot(e1, h);
-  if (abs(a) < 1e-8) { return 0; }
-  let f = 1.0 / a;
-  let s = ro - v0;
-  let u = f * dot(s, h);
-  if (u < -1e-5 || u > 1.0 + 1e-5) { return 0; }
-  let q = cross(s, e1);
-  let v = f * dot(rd, q);
-  if (v < -1e-5 || u + v > 1.0 + 1e-5) { return 0; }
-  let t = f * dot(e2, q);
-  if (t <= 0.0) { return 0; }
-  let n = normalize(cross(e1, e2));
-  var nn = n;
-  if (inv > 0.5) { nn = -nn; }
-  setIv(base, 0, t, t, nn, nn, alb);
-  return 1;
-}
-
 // ------------------------------------------------------------
 // ТРЕУГОЛЬНЫЕ СЕТКИ (полигональные модели)
 // Раскладку буфера задаёт js/scene/mesh.js: сначала узлы BVH (8 float на узел),
@@ -760,12 +514,10 @@ fn csgPushLeaf(pid : u32, ro : vec3f, rd : vec3f, shadow : bool) {
   var n : i32 = 0;
   if (kind == 1u) { n = sphereIntervals(pid, ro, rd, base); }
   else if (kind == 2u) { n = boxIntervals(pid, ro, rd, base); }
-  else if (kind == 3u) { n = torusIntervals(pid, ro, rd, base); }
-  else if (kind == 4u || kind == 5u) { n = coneIntervals(pid, ro, rd, base); }
-  else if (kind == 6u) { n = planeInterval(pid, ro, rd, base); }
-  else if (kind == 7u) { n = rectInterval(pid, ro, rd, base); }
-  else if (kind == 8u) { n = triInterval(pid, ro, rd, base); }
-  else if (kind == 9u) { n = meshLeaf(pid, ro, rd, base, shadow); }
+  else if (kind == 3u || kind == 4u) { n = coneIntervals(pid, ro, rd, base); }
+  else if (kind == 5u) { n = planeInterval(pid, ro, rd, base); }
+  else if (kind == 6u) { n = rectInterval(pid, ro, rd, base); }
+  else if (kind == 7u) { n = meshLeaf(pid, ro, rd, base, shadow); }
   s_cnt[s_top] = n;
   s_top = s_top + 1;
 }
@@ -943,9 +695,9 @@ fn csgBlocked(rd : vec3f) -> bool {
       let t1 = s_t1[i];
       let thick = t1 - t0;
       // Тень от «толстого» тела. Совсем тонкие отрезки — это либо лист
-      // (плоскость/прямоугольник/треугольник), либо касание на силуэте: касание
+      // (плоскость/прямоугольник), либо касание на силуэте: касание
       // тени не даёт, но из-за ошибки округления такие пиксели то попадали в тень,
-      // то нет — тень тора получалась пунктирной. Поэтому тело должно быть толще 5 мм.
+      // то нет — тень на силуэте получалась пунктирной. Поэтому тело должно быть толще 5 мм.
       if (thick > 5e-3) {
         if (t1 > T_EPS) { blocked = true; }
       } else if (thick <= 0.0) {

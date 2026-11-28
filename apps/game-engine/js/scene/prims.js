@@ -4,8 +4,6 @@
 (function (GE) {
   'use strict';
 
-  function vec(x, y, z) { return [x, y, z]; }
-
   function len(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; }
   function norm(a) { var l = len(a); return [a[0] / l, a[1] / l, a[2] / l]; }
   function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
@@ -84,17 +82,6 @@
       }, opts);
     },
 
-    // тор: центр, большой радиус R, радиус трубки r, наклон angle (радиан, вокруг X)
-    torus: function (x, y, z, R, r, angle, color, opts) {
-      var a = angle || 0;
-      var n = [0, Math.cos(a), Math.sin(a)];
-      var p = opts || {};
-      if (p.normal) n = norm(p.normal);
-      return this._opts({
-        kind: 'torus', cx: x, cy: y, cz: z, R: R, r: r, n: n, color: color
-      }, opts);
-    },
-
     // конус с двумя наклонными режущими плоскостями: capA и capB = {p:[x,y,z], n:[nx,ny,nz]}
     // нормали плоскостей смотрят наружу тела.
     cone: function (A, rA, B, rB, capA, capB, color, opts) {
@@ -139,13 +126,6 @@
         kind: 'rect',
         cx: center[0], cy: center[1], cz: center[2],
         u: u, v: v, hw: hw, hh: hh, color: color
-      }, opts);
-    },
-
-    // треугольник (для полигональной графики)
-    triangle: function (v0, v1, v2, color, opts) {
-      return this._opts({
-        kind: 'triangle', v0: v0, v1: v1, v2: v2, color: color
       }, opts);
     },
 

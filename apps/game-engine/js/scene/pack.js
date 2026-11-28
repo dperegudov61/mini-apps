@@ -17,7 +17,7 @@
   var PRIM_FLOATS = GE.PRIM_FLOATS || 32;
 
   var KIND = {
-    sphere: 1, box: 2, torus: 3, cone: 4, cylinder: 5, plane: 6, rect: 7, triangle: 8, mesh: 9
+    sphere: 1, box: 2, cone: 3, cylinder: 4, plane: 5, rect: 6, mesh: 7
   };
 
   // коды операций — должны совпадать с shaders/primitives.wgsl
@@ -82,11 +82,6 @@
       var X = obj.X, Y = obj.Y;
       d[o + 12] = X[0]; d[o + 13] = X[1]; d[o + 14] = X[2];
       d[o + 16] = Y[0]; d[o + 17] = Y[1]; d[o + 18] = Y[2];
-    } else if (k === 'torus') {
-      d[o + 4] = obj.cx; d[o + 5] = obj.cy; d[o + 6] = obj.cz;
-      d[o + 8] = obj.R; d[o + 9] = obj.r;
-      var n = obj.n;
-      d[o + 12] = n[0]; d[o + 13] = n[1]; d[o + 14] = n[2];
     } else if (k === 'cone' || k === 'cylinder') {
       d[o + 4] = obj.ax; d[o + 5] = obj.ay; d[o + 6] = obj.az; d[o + 7] = obj.rA;
       d[o + 8] = obj.bx; d[o + 9] = obj.by; d[o + 10] = obj.bz; d[o + 11] = obj.rB;
@@ -102,11 +97,6 @@
       d[o + 8] = u[0]; d[o + 9] = u[1]; d[o + 10] = u[2];
       d[o + 12] = v[0]; d[o + 13] = v[1]; d[o + 14] = v[2];
       d[o + 16] = obj.hw; d[o + 17] = obj.hh;
-    } else if (k === 'triangle') {
-      var v0 = obj.v0, v1 = obj.v1, v2 = obj.v2;
-      d[o + 4] = v0[0]; d[o + 5] = v0[1]; d[o + 6] = v0[2];
-      d[o + 8] = v1[0]; d[o + 9] = v1[1]; d[o + 10] = v1[2];
-      d[o + 12] = v2[0]; d[o + 13] = v2[1]; d[o + 14] = v2[2];
     } else if (k === 'mesh') {
       // модель уже лежит своей копией в буфере сеток; здесь только смещение и поворот
       var res = obj.mesh;

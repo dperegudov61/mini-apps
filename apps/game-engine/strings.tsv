@@ -15,14 +15,12 @@ game-engine.sceneBench	sphere cube	куб сфер
 game-engine.sceneBenchNote	a cube of spheres: the edge length sets the load — from 4³ to 32³	куб сфер: число сфер по ребру задаёт нагрузку — от 4³ до 32³
 game-engine.benchEdge	spheres per edge	сфер по ребру
 game-engine.benchRate	spheres per second	сфер в секунду
-game-engine.benchCount	objects	объектов
 game-engine.benchFill	fill now	заполнить сразу
 game-engine.benchStatus	{0} / {1} spheres · {2}/s	{0} / {1} сфер · {2}/с
 game-engine.benchFull	the cube is full: {0} spheres	куб заполнен: {0} сфер
 game-engine.scenePrims	primitives & surfaces	примитивы и поверхности
 game-engine.scenePrimsNote	every primitive and surface, plus boolean ops: a drilled sphere and a dumbbell	все примитивы и поверхности, плюс булевы операции: просверленная сфера и гантель
 game-engine.primsTurn	box rotation	поворот куба
-game-engine.primsTilt	torus tilt	наклон тора
 game-engine.primsStatus	{0} primitives · boolean ops: subtract and union	{0} примитивов · булевы операции: вычитание и объединение
 game-engine.scenePoly	polygonal model	полигональная модель
 game-engine.scenePolyNote	a triangle mesh loaded from an OBJ file, traced through a bounding-volume tree	треугольная сетка из файла OBJ, лучи идут через дерево ограничивающих коробок

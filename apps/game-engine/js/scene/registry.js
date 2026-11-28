@@ -39,12 +39,6 @@
       return { key: 'rate', label: 'game-engine.benchRate', fb: 'spheres per second',
         min: 0, max: 100, step: 1, def: num(def, 0), fmt: FMT.rate };
     },
-    // точное число тел: ползунок даёт прямую зависимость «количество → время кадра»
-    count: function (def, max) {
-      return { key: 'count', label: 'game-engine.benchCount', fb: 'objects',
-        min: 0, max: (typeof max === 'number' ? max : 4096), step: 1, def: num(def, 0),
-        fmt: function (v) { return String(Math.round(v)); } };
-    },
     stars: function (def) {
       return { key: 'stars', label: 'game-engine.stars', fb: 'stars', def: num(def, 1) };
     },

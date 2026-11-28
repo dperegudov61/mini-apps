@@ -143,7 +143,7 @@
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
-    // примитивы сцены: сферы, кубы, торы, конусы, поверхности (shaders/primitives.wgsl)
+    // примитивы сцены: сферы, кубы, конусы, цилиндры, поверхности (shaders/primitives.wgsl)
     this.primBuffer = device.createBuffer({
       label: 'primitives (storage)',
       size: MAX_PRIMS * PRIM_FLOATS * 4,
